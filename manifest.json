@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "ogarza.weather",
+  "name": "Omarchy Weather Effects",
+  "version": "1.2.0",
+  "author": "ogarza",
+  "description": "Fullscreen post-processing overlays with weather-aware presets",
+  "kinds": ["service", "bar-widget"],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Omarchy Weather Effects",
+    "description": "Rain, snow, fog, sun, storm, fire, or follow weather",
+    "category": "Desktop",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
