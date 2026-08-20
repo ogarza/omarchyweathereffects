@@ -69,4 +69,6 @@ Prebuilt `.qsb` files are included; editing a `.frag` rebuilds its `.qsb` the ne
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Original work is MIT — see [LICENSE](LICENSE).
+
+Rain and fire shaders include third-party material that is **not** covered by that MIT grant. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
