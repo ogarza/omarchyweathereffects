@@ -20,6 +20,8 @@ layout(std140, binding = 0) uniform buf {
     float glow;
     float lightning;
     float night;
+    float azimuth;
+    float sunDistance;
 };
 
 float hash11(float n) {
@@ -31,25 +33,37 @@ void main() {
     float aspect = resolution.x / max(resolution.y, 1.0);
     vec2 p = vec2(uv.x * aspect, uv.y);
 
-    vec2 sun = vec2(aspect * 0.83, -0.12);
+    float az = clamp(azimuth, 0.0, 2.0);
+    float dAmt = clamp(sunDistance, 0.0, 2.0);
+    float sunX = aspect * mix(-0.35, 2.01, az * 0.5);
+    vec2 sun = vec2(sunX, -0.12);
     vec2 delta = p - sun;
-    float dist = length(delta);
     float angle = atan(delta.y, delta.x);
+
+    // Wide depth range so the slider is obvious. 1.0 is the original cone.
+    float z = mix(0.06, 7.5, pow(dAmt * 0.5, 0.85));
+    float zRef = mix(0.06, 7.5, pow(0.5, 0.85));
+    float fall = z / zRef;
+    float dist = length(vec3(delta, z));
+    float distScreen = length(delta) * fall;
 
     float glowAmt = clamp(glow, 0.0, 2.0);
     float n = clamp(night, 0.0, 1.0);
     float t = time * max(speed, 0.0);
 
-    float dayWash = exp(-dist * 1.1) * 0.28 + exp(-dist * 2.6) * 0.12;
-    float nightWash = exp(-dist * 0.85) * 0.22 + exp(-dist * 1.8) * 0.10;
+    float dayWash = exp(-distScreen * 1.1) * 0.28 + exp(-distScreen * 2.6) * 0.12;
+    float nightWash = exp(-distScreen * 0.85) * 0.22 + exp(-distScreen * 1.8) * 0.10;
     float sunGlow = mix(dayWash, nightWash, n) * glowAmt;
 
-    float shafts = pow(max(sin(angle * 7.0 + t * 0.05) * 0.5 + 0.5, 0.0), 10.0);
-    float shafts2 = pow(max(sin(angle * 5.5 + 0.7 - t * 0.03) * 0.5 + 0.5, 0.0), 14.0);
-    float rayFade = mix(0.5, 1.0, exp(-dist * 0.22));
+    float nRays = mix(2.4, 12.0, dAmt * 0.5);
+    float sharp = mix(2.2, 26.0, dAmt * 0.5);
+    float shafts = pow(max(sin(angle * nRays + t * 0.05) * 0.5 + 0.5, 0.0), sharp);
+    float shafts2 = pow(max(sin(angle * (nRays * 0.78) + 0.7 - t * 0.03) * 0.5 + 0.5, 0.0), sharp + 4.0);
+    float rayFade = mix(0.35, 1.0, exp(-distScreen * mix(0.08, 0.55, dAmt * 0.5)));
     float rayAmt = mix(1.0, 0.40, n);
-    shafts = shafts * 0.20 * glowAmt * rayFade * rayAmt;
-    shafts2 = shafts2 * 0.10 * glowAmt * rayFade * rayAmt;
+    float cone = pow(zRef / max(dist, 0.001), mix(0.15, 1.8, dAmt * 0.5));
+    shafts = shafts * mix(0.34, 0.10, dAmt * 0.5) * glowAmt * rayFade * rayAmt * cone;
+    shafts2 = shafts2 * mix(0.18, 0.05, dAmt * 0.5) * glowAmt * rayFade * rayAmt * cone;
 
     float motes = 0.0;
     for (int i = 0; i < 18; i++) {
@@ -76,8 +90,8 @@ void main() {
     float heat = clamp(sunGlow * 1.4, 0.0, 1.0);
     vec3 col = mix(mix(gold, warm, heat), mix(steel, silver, heat), n);
     float alpha = sunGlow * mix(0.22, 0.18, n) + shafts + shafts2 + motes * mix(0.16, 0.10, n);
-    alpha = clamp(alpha, 0.0, mix(0.48, 0.34, n));
+    alpha = clamp(alpha, 0.0, mix(0.72, 0.22, dAmt * 0.5) * mix(1.0, 0.72, n));
 
     fragColor = vec4(col * alpha, alpha) * qt_Opacity * clamp(strength, 0.0, 1.0);
-    fragColor.a += 0.0 * (density + lightning + scale);
+    fragColor.a += 0.0 * (density + lightning + scale + azimuth + sunDistance);
 }

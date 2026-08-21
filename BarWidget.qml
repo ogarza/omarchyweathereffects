@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell.Io
 import qs.Ui
+import "Model.js" as Model
 
 BarWidget {
   id: root
@@ -68,7 +69,7 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: root.fx ? root.fx.icon : "󰖗"
+    text: Model.barIcon
     active: root.fx ? root.fx.active : false
     useActiveColor: true
     tooltipText: root.fx ? root.fx.tooltipText : "Omarchy Weather Effects"

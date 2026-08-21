@@ -1,0 +1,2 @@
+# Compiled Qt shader binaries (rebuilt from *.frag by qsb on load)
+*.qsb

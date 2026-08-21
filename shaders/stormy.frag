@@ -35,7 +35,7 @@
 // comes from the drop normals (meniscus, spec, and a dark lens side).
 
 // Storm overlay on the rain-on-glass model: same Y-up mapping as rain.frag,
-// faster rolling drops, a dark wash, lightning, and diagonal wind spray.
+// faster rolling drops, a dark wash, and lightning.
 
 layout(location = 0) in vec2 qt_TexCoord0;
 layout(location = 0) out vec4 fragColor;
@@ -274,30 +274,6 @@ float sdSegment(vec2 p, vec2 a, vec2 b) {
     return length(pa - ba * h);
 }
 
-float windSpray(vec2 frag, float t) {
-    float dpr = max(pixelRatio, 1.0);
-    vec2 wind = normalize(vec2(0.62, -1.0));
-    float acc = 0.0;
-    for (int i = 0; i < 22; i++) {
-        float fi = float(i);
-        float sx = Random(vec2(fi, 3.17), RandomSeed);
-        float sy = Random(vec2(fi, 9.41), RandomSeed);
-        float sp = 0.18 + sx * 0.32;
-        vec2 pos = vec2(
-            fract(sx + t * sp * 0.42) * resolution.x,
-            fract(sy - t * sp * 0.70) * resolution.y
-        );
-        vec2 d = frag - pos;
-        float along = dot(d, wind);
-        float across = d.x * wind.y - d.y * wind.x;
-        float len = mix(7.0, 16.0, sy) * dpr;
-        float thick = mix(0.6, 1.3, sx) * dpr;
-        float dash = smoothstep(thick, 0.0, abs(across)) * smoothstep(len, 0.0, abs(along));
-        acc += dash * mix(0.25, 0.8, sx);
-    }
-    return acc;
-}
-
 vec2 boltVertex(float seed, float t, float x0) {
     float stepId = floor(t * 12.0 + 0.001);
     float wander = Random(vec2(seed, stepId + 0.3), RandomSeed) - 0.5;
@@ -415,9 +391,6 @@ void main() {
     float wash = 0.11 + vignette * 0.12;
     vec3 washCol = vec3(0.04, 0.055, 0.08);
 
-    float spray = windSpray(frag, time);
-    vec3 sprayCol = vec3(0.78, 0.86, 0.95);
-
     float cycle = floor(time * 0.20);
     float phase = fract(time * 0.20);
     float strike = step(1.0 - 0.22 * clamp(lightning, 0.0, 2.0), Random(vec2(cycle, 11.0), RandomSeed));
@@ -431,11 +404,10 @@ void main() {
     vec3 boltCol = vec3(0.90, 0.95, 1.0);
 
     float rainAlpha = clamp(darken + brighten + h * 0.025, 0.0, 0.50);
-    float sprayAlpha = clamp(spray * 0.22, 0.0, 0.20);
     float flashAlpha = flash * 0.07 + boltMask * 0.85;
-    float alpha = clamp(wash + rainAlpha + sprayAlpha + flashAlpha, 0.0, 0.62);
+    float alpha = clamp(wash + rainAlpha + flashAlpha, 0.0, 0.62);
 
-    vec3 premul = washCol * wash + col * rainAlpha + sprayCol * sprayAlpha + boltCol * flashAlpha;
+    vec3 premul = washCol * wash + col * rainAlpha + boltCol * flashAlpha;
     fragColor = vec4(premul, alpha) * qt_Opacity * clamp(strength, 0.0, 1.0);
     fragColor.a += 0.0 * glow;
 }

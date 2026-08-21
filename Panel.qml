@@ -18,12 +18,20 @@ Panel {
     ? bar.shell.serviceFor("ogarza.weather") : null
 
   readonly property var modeList: Model.modes
-  readonly property bool showTweaks: !!(fx && Model.hasTweaks(fx.mode))
-  readonly property var advancedFields: fx ? Model.fieldsForMode(fx.mode) : []
+  readonly property var exclusiveList: Model.exclusivePresets
+  readonly property bool exclusiveMode: !!(fx && fx.mode === "exclusive")
+  readonly property string tweakPreset: {
+    if (!fx) return "rain"
+    if (fx.mode === "exclusive") return fx.exclusivePreset
+    return fx.mode
+  }
+  readonly property bool showTweaks: !!(fx && Model.hasTweaks(tweakPreset))
+  readonly property var advancedFields: fx ? Model.fieldsForMode(tweakPreset) : []
   readonly property int tweakRowCount: showTweaks ? (1 + advancedFields.length) : 0
 
   property string focusSection: "modes"
   property int modeIndex: 0
+  property int trackIndex: 0
   property int tweakIndex: 0
   property bool cursorActive: false
 
@@ -35,11 +43,18 @@ Panel {
   readonly property string toggleHint: fx && fx.active ? "Turn overlay off" : "Turn overlay on"
   readonly property string heroMeta: fx ? fx.statusText : "Post processing"
 
+  function syncPanelOpen() {
+    if (root.fx) root.fx.panelOpen = root.opened === true
+  }
+
   function open() {
     if (root.fx && typeof root.fx.scanShaders === "function") root.fx.scanShaders()
     root.syncCursorToMode()
     root.controller.show()
   }
+
+  onOpenedChanged: root.syncPanelOpen()
+  onFxChanged: root.syncPanelOpen()
 
   function switchPanel(direction) {
     if (root.bar && typeof root.bar.switchPanelFrom === "function")
@@ -60,14 +75,25 @@ Panel {
         break
       }
     }
+    for (var j = 0; j < root.exclusiveList.length; j++) {
+      if (root.exclusiveList[j].value === root.fx.exclusivePreset) {
+        root.trackIndex = j
+        break
+      }
+    }
   }
 
   function clampCursor() {
-    if (root.focusSection === "tweaks" && !root.showTweaks)
+    if (root.focusSection === "track" && !root.exclusiveMode)
       root.focusSection = "modes"
+    if (root.focusSection === "tweaks" && !root.showTweaks)
+      root.focusSection = root.exclusiveMode ? "track" : "modes"
     if (root.modeIndex < 0) root.modeIndex = 0
     if (root.modeIndex >= root.modeList.length)
       root.modeIndex = Math.max(0, root.modeList.length - 1)
+    if (root.trackIndex < 0) root.trackIndex = 0
+    if (root.trackIndex >= root.exclusiveList.length)
+      root.trackIndex = Math.max(0, root.exclusiveList.length - 1)
     if (root.tweakIndex < 0) root.tweakIndex = 0
     if (root.tweakIndex >= root.tweakRowCount)
       root.tweakIndex = Math.max(0, root.tweakRowCount - 1)
@@ -76,11 +102,11 @@ Panel {
   function adjustTweak(dir) {
     if (!root.fx || !root.showTweaks) return
     if (root.tweakIndex === 0) {
-      root.fx.nudgeParam(root.fx.mode, "strength", dir)
+      root.fx.nudgeParam(root.tweakPreset, "strength", dir)
       return
     }
     var field = root.advancedFields[root.tweakIndex - 1]
-    if (field) root.fx.nudgeParam(root.fx.mode, field.key, dir)
+    if (field) root.fx.nudgeParam(root.tweakPreset, field.key, dir)
   }
 
   function moveCursor(dx, dy) {
@@ -110,16 +136,51 @@ Panel {
         root.modeIndex = root.modeIndex + 1
         return
       }
+      if (root.exclusiveMode) {
+        root.focusSection = "track"
+        root.trackIndex = 0
+        return
+      }
       if (root.showTweaks) {
         root.focusSection = "tweaks"
         root.tweakIndex = 0
+        return
       }
+      root.focusSection = "reset"
+      return
+    }
+
+    if (root.focusSection === "track") {
+      if (dy < 0) {
+        if (root.trackIndex <= 0) {
+          root.focusSection = "modes"
+          root.modeIndex = root.modeList.length - 1
+          return
+        }
+        root.trackIndex = root.trackIndex - 1
+        return
+      }
+      if (root.trackIndex < root.exclusiveList.length - 1) {
+        root.trackIndex = root.trackIndex + 1
+        return
+      }
+      if (root.showTweaks) {
+        root.focusSection = "tweaks"
+        root.tweakIndex = 0
+        return
+      }
+      root.focusSection = "reset"
       return
     }
 
     if (root.focusSection === "tweaks") {
       if (dy < 0) {
         if (root.tweakIndex <= 0) {
+          if (root.exclusiveMode) {
+            root.focusSection = "track"
+            root.trackIndex = root.exclusiveList.length - 1
+            return
+          }
           root.focusSection = "modes"
           root.modeIndex = root.modeList.length - 1
           return
@@ -127,8 +188,29 @@ Panel {
         root.tweakIndex = root.tweakIndex - 1
         return
       }
-      if (root.tweakIndex < root.tweakRowCount - 1)
+      if (root.tweakIndex < root.tweakRowCount - 1) {
         root.tweakIndex = root.tweakIndex + 1
+        return
+      }
+      root.focusSection = "reset"
+      return
+    }
+
+    if (root.focusSection === "reset") {
+      if (dy < 0) {
+        if (root.showTweaks) {
+          root.focusSection = "tweaks"
+          root.tweakIndex = root.tweakRowCount - 1
+          return
+        }
+        if (root.exclusiveMode) {
+          root.focusSection = "track"
+          root.trackIndex = root.exclusiveList.length - 1
+          return
+        }
+        root.focusSection = "modes"
+        root.modeIndex = root.modeList.length - 1
+      }
     }
   }
 
@@ -141,10 +223,19 @@ Panel {
     if (root.focusSection === "modes") {
       var entry = root.modeList[root.modeIndex]
       if (entry) root.fx.setMode(entry.value)
+      return
     }
+    if (root.focusSection === "track") {
+      var track = root.exclusiveList[root.trackIndex]
+      if (track) root.fx.setExclusivePreset(track.value)
+      return
+    }
+    if (root.focusSection === "reset")
+      root.fx.resetParams()
   }
 
   onShowTweaksChanged: root.clampCursor()
+  onExclusiveModeChanged: root.clampCursor()
 
   KeyboardPanel {
     id: panel
@@ -242,6 +333,37 @@ Panel {
           }
 
           Column {
+            visible: root.exclusiveMode
+            width: parent.width
+            spacing: Style.space(6)
+
+            PanelSeparator {
+              foreground: root.foreground
+            }
+
+            Text {
+              width: parent.width
+              text: "Track only"
+              color: root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              font.bold: true
+            }
+
+            Repeater {
+              model: root.exclusiveList
+
+              TrackRow {
+                required property var modelData
+                required property int index
+                width: parent.width
+                entry: modelData
+                rowIndex: index
+              }
+            }
+          }
+
+          Column {
             visible: root.showTweaks
             width: parent.width
             spacing: Style.space(8)
@@ -267,9 +389,22 @@ Panel {
                 width: parent.width
                 label: String(modelData.label)
                 paramKey: String(modelData.key)
-                maximum: 2
+                maximum: Model.fieldMaximum(root.tweakPreset, String(modelData.key))
                 rowIndex: index + 1
               }
+            }
+          }
+
+          Column {
+            width: parent.width
+            spacing: Style.space(8)
+
+            PanelSeparator {
+              foreground: root.foreground
+            }
+
+            ResetRow {
+              width: parent.width
             }
           }
         }
@@ -333,6 +468,109 @@ Panel {
     }
   }
 
+  component TrackRow: CursorSurface {
+    id: trackRow
+    property var entry: null
+    property int rowIndex: 0
+    readonly property string value: entry ? String(entry.value) : ""
+    readonly property string label: entry ? String(entry.label) : ""
+    readonly property string glyph: entry ? String(entry.icon) : ""
+    readonly property bool selected: root.fx && root.fx.exclusivePreset === trackRow.value
+
+    hasCursor: root.cursorActive && root.focusSection === "track" && root.trackIndex === rowIndex
+    current: selected
+    foreground: root.foreground
+
+    implicitHeight: trackContent.implicitHeight + Style.space(10)
+
+    MouseArea {
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onEntered: {
+        root.cursorActive = true
+        root.focusSection = "track"
+        root.trackIndex = trackRow.rowIndex
+      }
+      onClicked: if (root.fx) root.fx.setExclusivePreset(trackRow.value)
+    }
+
+    RowLayout {
+      id: trackContent
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      anchors.leftMargin: Style.space(10)
+      anchors.rightMargin: Style.space(10)
+      spacing: Style.space(10)
+
+      Text {
+        text: trackRow.glyph
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.icon
+        Layout.alignment: Qt.AlignVCenter
+      }
+
+      Text {
+        Layout.fillWidth: true
+        text: trackRow.label
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.body
+        font.bold: trackRow.selected
+        elide: Text.ElideRight
+      }
+    }
+  }
+
+  component ResetRow: CursorSurface {
+    id: resetRow
+    hasCursor: root.cursorActive && root.focusSection === "reset"
+    current: false
+    foreground: root.foreground
+
+    implicitHeight: resetContent.implicitHeight + Style.space(10)
+
+    MouseArea {
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onEntered: {
+        root.cursorActive = true
+        root.focusSection = "reset"
+      }
+      onClicked: if (root.fx) root.fx.resetParams()
+    }
+
+    RowLayout {
+      id: resetContent
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      anchors.leftMargin: Style.space(10)
+      anchors.rightMargin: Style.space(10)
+      spacing: Style.space(10)
+
+      Text {
+        text: "󰑓"
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.icon
+        Layout.alignment: Qt.AlignVCenter
+      }
+
+      Text {
+        Layout.fillWidth: true
+        text: "Reset to defaults"
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.body
+        elide: Text.ElideRight
+      }
+    }
+  }
+
   component TweakSlider: Column {
     id: tweakCol
     property string label: ""
@@ -342,7 +580,7 @@ Panel {
     spacing: Style.space(4)
 
     readonly property real paramValue: root.fx
-      ? Model.paramValue(root.fx.params, root.fx.mode, tweakCol.paramKey, 1)
+      ? Model.paramValue(root.fx.params, root.tweakPreset, tweakCol.paramKey, 1)
       : 1
 
     Text {
@@ -372,10 +610,10 @@ Panel {
         step: tweakCol.maximum > 1 ? 0.1 : 0.05
         value: tweakCol.paramValue
         onMoved: function(v) {
-          if (root.fx) root.fx.setParam(root.fx.mode, tweakCol.paramKey, v, false)
+          if (root.fx) root.fx.setParam(root.tweakPreset, tweakCol.paramKey, v, false)
         }
         onReleased: function(v) {
-          if (root.fx) root.fx.setParam(root.fx.mode, tweakCol.paramKey, v, true)
+          if (root.fx) root.fx.setParam(root.tweakPreset, tweakCol.paramKey, v, true)
         }
       }
 
