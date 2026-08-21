@@ -2,7 +2,7 @@
 
 Fullscreen weather overlays for [Omarchy](https://omarchy.org/) — rain on glass, snow, fog, sun glow, storms, and fire drawn as transparent Wayland layer-shell shaders on top of your desktop.
 
-Plugin id: `ogarza.weather` · version **1.4.0**
+Plugin id: `ogarza.weather` · version **1.4.1**
 
 The bar uses a sparkles glyph so it does not look like a second copy of Omarchy’s built-in weather widget. Weather icons still appear inside the panel for each mode.
 
@@ -75,6 +75,10 @@ Sources live in `shaders/`:
 Prebuilt `.qsb` files are generated locally and gitignored; editing a `.frag` rebuilds its `.qsb` the next time the service scans.
 
 ## Changelog
+
+### 1.4.1
+
+- Fire shader compiles again (comment header was missing a slash)
 
 ### 1.4.0
 

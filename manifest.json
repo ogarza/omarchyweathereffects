@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "ogarza.weather",
   "name": "Omarchy Weather Effects",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "author": "ogarza",
   "description": "Fullscreen post-processing overlays with weather-aware presets",
   "kinds": ["service", "bar-widget"],

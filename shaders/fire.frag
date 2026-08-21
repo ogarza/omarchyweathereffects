@@ -1,6 +1,6 @@
 #version 440
 
-/ Ground-fire overlay
+// Ground-fire overlay
 //
 // Adapted from and substantially modified from a ShaderToy shader by
 // an author who has not provided an explicit license in the original
