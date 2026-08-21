@@ -44,25 +44,29 @@ Item {
   readonly property real uLightning: Model.paramValue(root.params, root.paramPreset || "stormy", "lightning", 1)
 
   readonly property string icon: {
-    if (root.mode === "follow") return Model.iconForMode(root.weatherPreset || "follow")
-    return Model.iconForMode(root.mode)
+    var preset = root.mode === "follow" ? (root.weatherPreset || "sunny") : root.mode
+    return Model.iconForPreset(preset, root.nightFactor)
   }
 
   readonly property string statusText: {
     if (!root.active) return "Overlay off"
-    if (root.mode === "follow") return "Following · " + Model.labelForPreset(root.weatherPreset || "sunny")
+    if (root.mode === "follow") return "Following · " + Model.labelForPreset(root.weatherPreset || "sunny", root.nightFactor)
+    if (root.mode === "sunny") return Model.labelForPreset("sunny", root.nightFactor)
     return Model.labelForMode(root.mode)
   }
 
   readonly property string tooltipText: {
     var state = root.active ? "on" : "off"
     if (root.mode === "follow")
-      return "ogarza.weather " + state + " · Follow · " + Model.labelForPreset(root.weatherPreset || "sunny")
+      return "ogarza.weather " + state + " · Follow · " + Model.labelForPreset(root.weatherPreset || "sunny", root.nightFactor)
+    if (root.mode === "sunny")
+      return "ogarza.weather " + state + " · " + Model.labelForPreset("sunny", root.nightFactor)
     return "ogarza.weather " + state + " · " + Model.labelForMode(root.mode)
   }
 
   property var configuredLocationState: ({ name: "", latitude: null, longitude: null, hasCoordinates: false })
   property int weatherRetries: 0
+  property real nightFactor: 0
   readonly property int weatherResponseMaxBytes: 262144
 
   function weatherFetchCommand(url, timeoutSec) {
@@ -214,6 +218,11 @@ Item {
     root.weatherPreset = next
   }
 
+  function refreshNightFactor() {
+    var loc = root.configuredLocationState
+    root.nightFactor = Model.nightFactor(loc ? loc.latitude : null, loc ? loc.longitude : null, Date.now())
+  }
+
   function scheduleWeatherRetry() {
     if (root.weatherRetries >= 3) return
     root.weatherRetries++
@@ -223,6 +232,7 @@ Item {
   // createObject() runs onCompleted before the shell injects pluginRegistry.
   onPluginRegistryChanged: loadPersisted()
   onShellChanged: loadPersisted()
+  onConfiguredLocationStateChanged: root.refreshNightFactor()
   Component.onCompleted: scanShaders()
 
   FileView {
@@ -281,6 +291,14 @@ Item {
     }
   }
 
+  Timer {
+    interval: 15000
+    running: true
+    repeat: true
+    triggeredOnStart: true
+    onTriggered: root.refreshNightFactor()
+  }
+
   FrameAnimation {
     id: clock
     running: root.active
@@ -326,6 +344,7 @@ Item {
         property real scale: root.uScale
         property real glow: root.uGlow
         property real lightning: root.uLightning
+        property real night: root.effectivePreset === "sunny" ? root.nightFactor : 0
       }
     }
   }
