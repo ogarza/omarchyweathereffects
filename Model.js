@@ -44,15 +44,25 @@ function iconForMode(value) {
   return modeEntry(value).icon
 }
 
-function labelForPreset(preset) {
+function moonlightActive(nightFactor) {
+  return parseFloat(nightFactor) >= 0.5
+}
+
+function labelForPreset(preset, nightFactor) {
   var v = String(preset || "")
   if (v === "fog") return "Cloud/Fog"
   if (v === "rain") return "Rain"
   if (v === "snow") return "Snow"
-  if (v === "sunny") return "Sunny"
+  if (v === "sunny") return moonlightActive(nightFactor) ? "Moonlight" : "Sunny"
   if (v === "stormy") return "Stormy"
   if (v === "fire") return "Fire"
   return labelForMode(v)
+}
+
+function iconForPreset(preset, nightFactor) {
+  var v = String(preset || "")
+  if (v === "sunny" && moonlightActive(nightFactor)) return "󰖔"
+  return iconForMode(v)
 }
 
 function shaderFileForPreset(preset) {
@@ -177,6 +187,54 @@ function fileUrlToPath(url) {
   var text = String(url || "")
   if (text.indexOf("file://") === 0) return text.substring(7)
   return text
+}
+
+function wrapDegrees(value) {
+  var n = value % 360
+  return n < 0 ? n + 360 : n
+}
+
+function wrapHours(value) {
+  var n = value % 24
+  return n < 0 ? n + 24 : n
+}
+
+// Solar altitude in degrees from lat/lon (positive = above horizon).
+function solarElevationDeg(latitude, longitude, date) {
+  var ms = date.getTime()
+  var jd = ms / 86400000 + 2440587.5
+  var n = jd - 2451545.0
+  var rad = Math.PI / 180
+  var L = wrapDegrees(280.460 + 0.9856474 * n)
+  var g = wrapDegrees(357.528 + 0.9856003 * n) * rad
+  var lambda = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * rad
+  var epsilon = (23.439 - 0.0000004 * n) * rad
+  var decl = Math.asin(Math.sin(epsilon) * Math.sin(lambda))
+  var ra = Math.atan2(Math.cos(epsilon) * Math.sin(lambda), Math.cos(lambda))
+  var gmst = wrapHours(18.697374558 + 24.06570982441908 * n)
+  var lst = wrapHours(gmst + longitude / 15)
+  var ha = lst * 15 * rad - ra
+  var latR = latitude * rad
+  var sinAlt = Math.sin(latR) * Math.sin(decl) + Math.cos(latR) * Math.cos(decl) * Math.cos(ha)
+  return Math.asin(Math.max(-1, Math.min(1, sinAlt))) / rad
+}
+
+function clockElevationDeg(date) {
+  var minutes = date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60
+  return Math.cos((minutes / 1440 - 0.5) * 2 * Math.PI) * 30
+}
+
+// 0 = daylight, 1 = full night. Blends across civil twilight (0° to -6°).
+function nightFactor(latitude, longitude, nowMs) {
+  var date = new Date(nowMs || Date.now())
+  var lat = parseFloat(String(latitude))
+  var lon = parseFloat(String(longitude))
+  var alt = (!isNaN(lat) && !isNaN(lon))
+    ? solarElevationDeg(lat, lon, date)
+    : clockElevationDeg(date)
+  if (alt >= 0) return 0
+  if (alt <= -6) return 1
+  return (0 - alt) / 6
 }
 
 // weather.json holds {"name": ..., "latitude": ..., "longitude": ...}

@@ -35,12 +35,12 @@ omarchy plugin remove ogarza.weather
 | Rain | Rain-on-glass drops and trails |
 | Snow | Falling snow |
 | Cloud/Fog | Soft fog / overcast haze |
-| Sunny | Warm sun glow |
+| Sunny | Warm sun glow by day, cool moonlight after sunset |
 | Stormy | Heavy weather + lightning |
 | Fire | Ground fire (manual only — not used by Follow) |
 | Follow | Matches current weather for your Omarchy location |
 
-In **Follow**, the plugin reads `~/.local/state/omarchy/settings/weather.json` (same location Omarchy weather uses). With coordinates it queries [Open-Meteo](https://open-meteo.com/); otherwise it falls back to [wttr.in](https://wttr.in/). Conditions refresh about every 15 minutes. Follow only selects rain, snow, fog, sunny, or stormy — never fire.
+In **Follow**, the plugin reads `~/.local/state/omarchy/settings/weather.json` (same location Omarchy weather uses). With coordinates it queries [Open-Meteo](https://open-meteo.com/); otherwise it falls back to [wttr.in](https://wttr.in/). Conditions refresh about every 15 minutes. Follow only selects rain, snow, fog, sunny, or stormy — never fire. Clear skies use sunlight during the day and moonlight after sunset at that location.
 
 ### Tweaks
 
