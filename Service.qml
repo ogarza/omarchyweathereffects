@@ -16,16 +16,29 @@ Item {
   readonly property string pluginId: "ogarza.weather"
   property bool active: false
   property string mode: "rain"
-  property string weatherPreset: "sunny"
+  property string weatherPreset: ""
+  property string exclusivePreset: "snow"
   property var shaderFiles: []
   property var params: Model.mergeParams(null)
+  property bool panelOpen: false
+
+  readonly property bool liveWeatherMode: Model.isLiveWeatherMode(root.mode)
+
+  readonly property bool exclusiveMatch: root.mode !== "exclusive"
+    || root.weatherPreset === root.exclusivePreset
+
+  readonly property bool exclusivePreview: root.mode === "exclusive" && root.panelOpen
+
+  readonly property bool overlayVisible: root.exclusivePreview
+    || (root.active && root.exclusiveMatch)
 
   readonly property string effectivePreset: {
     if (root.mode === "follow") return root.weatherPreset || "sunny"
+    if (root.mode === "exclusive") return root.exclusivePreset
     return root.mode
   }
 
-  readonly property string shaderFileName: Model.shaderFileForMode(root.mode, root.weatherPreset)
+  readonly property string shaderFileName: Model.shaderFileForMode(root.mode, root.weatherPreset, root.exclusivePreset)
 
   readonly property url shaderUrl: Qt.resolvedUrl("shaders/" + shaderFileName)
 
@@ -42,15 +55,29 @@ Item {
   readonly property real uScale: Model.paramValue(root.params, root.paramPreset || "rain", "scale", 1)
   readonly property real uGlow: Model.paramValue(root.params, root.paramPreset || "sunny", "glow", 1)
   readonly property real uLightning: Model.paramValue(root.params, root.paramPreset || "stormy", "lightning", 1)
+  readonly property real uAzimuth: Model.paramValue(root.params, root.paramPreset || "sunny", "azimuth", 1)
+  readonly property real uDistance: Model.paramValue(root.params, root.paramPreset || "sunny", "distance", 1)
 
   readonly property string icon: {
-    var preset = root.mode === "follow" ? (root.weatherPreset || "sunny") : root.mode
-    return Model.iconForPreset(preset, root.nightFactor)
+    if (root.mode === "follow")
+      return Model.iconForPreset(root.weatherPreset || "sunny", root.nightFactor)
+    if (root.mode === "exclusive")
+      return Model.iconForPreset(root.exclusivePreset, root.nightFactor)
+    return Model.iconForPreset(root.mode, root.nightFactor)
   }
 
   readonly property string statusText: {
+    if (root.mode === "exclusive") {
+      var wanted = Model.labelForExclusivePreset(root.exclusivePreset, root.nightFactor)
+      if (root.exclusivePreview && !root.exclusiveMatch)
+        return "Ex. · " + wanted + " · preview"
+      if (!root.active) return "Overlay off"
+      if (!root.exclusiveMatch) return "Ex. · " + wanted + " · waiting"
+      return "Ex. · " + wanted
+    }
     if (!root.active) return "Overlay off"
-    if (root.mode === "follow") return "Following · " + Model.labelForPreset(root.weatherPreset || "sunny", root.nightFactor)
+    if (root.mode === "follow")
+      return "Following · " + Model.labelForPreset(root.weatherPreset || "sunny", root.nightFactor)
     if (root.mode === "sunny") return Model.labelForPreset("sunny", root.nightFactor)
     return Model.labelForMode(root.mode)
   }
@@ -59,6 +86,11 @@ Item {
     var state = root.active ? "on" : "off"
     if (root.mode === "follow")
       return "ogarza.weather " + state + " · Follow · " + Model.labelForPreset(root.weatherPreset || "sunny", root.nightFactor)
+    if (root.mode === "exclusive") {
+      var wanted = Model.labelForExclusivePreset(root.exclusivePreset, root.nightFactor)
+      var wait = root.exclusiveMatch ? "" : " · waiting"
+      return "ogarza.weather " + state + " · Exclusive · " + wanted + wait
+    }
     if (root.mode === "sunny")
       return "ogarza.weather " + state + " · " + Model.labelForPreset("sunny", root.nightFactor)
     return "ogarza.weather " + state + " · " + Model.labelForMode(root.mode)
@@ -111,8 +143,9 @@ Item {
     if (!entry) return
     root.active = entry.active === true
     root.mode = Model.normalizedMode(entry.mode)
+    root.exclusivePreset = Model.normalizedExclusivePreset(entry.exclusivePreset)
     root.params = Model.mergeParams(entry.params)
-    if (root.mode === "follow") Qt.callLater(root.refreshWeather)
+    if (root.liveWeatherMode) Qt.callLater(root.refreshWeather)
   }
 
   function persistSettings() {
@@ -124,15 +157,21 @@ Item {
     }
     settings.active = root.active
     settings.mode = root.mode
+    settings.exclusivePreset = root.exclusivePreset
     settings.params = root.params
     delete settings.customShader
     shell.updateEntryInline(pluginId, settings)
   }
 
+  function resetParams() {
+    root.params = Model.mergeParams(null)
+    persistSettings()
+  }
+
   function setParam(preset, key, value, persist) {
     var mode = Model.normalizedMode(preset)
     if (!Model.hasTweaks(mode)) return
-    var clamped = Model.clampParam(key, value)
+    var clamped = Model.clampParam(key, value, mode)
     var current = Model.paramValue(root.params, mode, key, key === "strength" ? 1 : 1)
     if (current === clamped) {
       if (persist !== false) persistSettings()
@@ -164,12 +203,23 @@ Item {
   function setMode(value) {
     var next = Model.normalizedMode(value)
     if (root.mode === next) {
-      if (next === "follow") root.refreshWeather()
+      if (Model.isLiveWeatherMode(next)) root.refreshWeather()
       return
     }
     root.mode = next
     persistSettings()
-    if (next === "follow") root.refreshWeather()
+    if (Model.isLiveWeatherMode(next)) root.refreshWeather()
+  }
+
+  function setExclusivePreset(value) {
+    var next = Model.normalizedExclusivePreset(value)
+    if (root.exclusivePreset === next) {
+      if (root.mode === "exclusive") root.refreshWeather()
+      return
+    }
+    root.exclusivePreset = next
+    persistSettings()
+    if (root.mode === "exclusive") root.refreshWeather()
   }
 
   function scanShaders() {
@@ -186,7 +236,7 @@ Item {
   }
 
   function refreshWeather() {
-    if (root.mode !== "follow") return
+    if (!root.liveWeatherMode) return
     if (openMeteoProc.running || wttrProc.running) return
 
     var lat = parseFloat(String(root.configuredLocationState.latitude))
@@ -243,11 +293,11 @@ Item {
     onLoaded: {
       root.configuredLocationState = Model.parseLocationFile(text())
       root.weatherRetries = 0
-      if (root.mode === "follow") root.refreshWeather()
+      if (root.liveWeatherMode) root.refreshWeather()
     }
     onLoadFailed: {
       root.configuredLocationState = Model.parseLocationFile("")
-      if (root.mode === "follow") root.refreshWeather()
+      if (root.liveWeatherMode) root.refreshWeather()
     }
   }
 
@@ -278,12 +328,12 @@ Item {
   Timer {
     id: weatherRetryTimer
     interval: 2500
-    onTriggered: if (root.mode === "follow") root.refreshWeather()
+    onTriggered: if (root.liveWeatherMode) root.refreshWeather()
   }
 
   Timer {
     interval: 15 * 60 * 1000
-    running: root.mode === "follow"
+    running: root.liveWeatherMode
     repeat: true
     onTriggered: {
       root.weatherRetries = 0
@@ -301,7 +351,7 @@ Item {
 
   FrameAnimation {
     id: clock
-    running: root.active
+    running: root.overlayVisible
   }
 
   Variants {
@@ -312,7 +362,7 @@ Item {
       required property var modelData
 
       screen: modelData
-      visible: root.active && !remapGuard.remapping
+      visible: root.overlayVisible && !remapGuard.remapping
       color: "transparent"
       anchors { top: true; bottom: true; left: true; right: true }
 
@@ -344,6 +394,8 @@ Item {
         property real scale: root.uScale
         property real glow: root.uGlow
         property real lightning: root.uLightning
+        property real azimuth: root.uAzimuth
+        property real sunDistance: root.uDistance
         property real night: root.effectivePreset === "sunny" ? root.nightFactor : 0
       }
     }

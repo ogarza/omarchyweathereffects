@@ -8,8 +8,12 @@ var modes = [
   { value: "sunny", label: "Sunny", icon: "󰖙" },
   { value: "stormy", label: "Stormy", icon: "󰖓" },
   { value: "fire", label: "Fire", icon: "󰈸" },
-  { value: "follow", label: "Follow", icon: "󰔏" }
+  { value: "follow", label: "Follow", icon: "󰔏" },
+  { value: "exclusive", label: "Exclusive", icon: "󰮯" }
 ]
+
+// Bar glyph: sparkles = desktop effects, not a forecast (those stay in the panel).
+var barIcon = "󰙲"
 
 var modeValues = {
   rain: true,
@@ -18,7 +22,25 @@ var modeValues = {
   sunny: true,
   stormy: true,
   fire: true,
-  follow: true
+  follow: true,
+  exclusive: true
+}
+
+// Follow / Exclusive never pick fire — same Open-Meteo / wttr groups.
+var exclusivePresets = [
+  { value: "rain", label: "Rain", icon: "󰖗" },
+  { value: "snow", label: "Snow", icon: "󰖘" },
+  { value: "fog", label: "Cloud/Fog", icon: "󰖑" },
+  { value: "sunny", label: "Sunny", icon: "󰖙" },
+  { value: "stormy", label: "Stormy", icon: "󰖓" }
+]
+
+var exclusivePresetValues = {
+  rain: true,
+  snow: true,
+  fog: true,
+  sunny: true,
+  stormy: true
 }
 
 function modeEntry(value) {
@@ -34,6 +56,30 @@ function normalizedMode(value) {
   if (v === "cloud" || v === "cloud/fog" || v === "cloud-fog" || v === "clouds") return "fog"
   if (modeValues[v]) return v
   return "rain"
+}
+
+function isLiveWeatherMode(value) {
+  var m = normalizedMode(value)
+  return m === "follow" || m === "exclusive"
+}
+
+function exclusivePresetEntry(value) {
+  var v = String(value || "")
+  for (var i = 0; i < exclusivePresets.length; i++) {
+    if (exclusivePresets[i].value === v) return exclusivePresets[i]
+  }
+  return exclusivePresets[1]
+}
+
+function normalizedExclusivePreset(value) {
+  var v = String(value || "").replace(/^\s+|\s+$/g, "").toLowerCase()
+  if (v === "cloud" || v === "cloud/fog" || v === "cloud-fog" || v === "clouds") return "fog"
+  if (exclusivePresetValues[v]) return v
+  return "snow"
+}
+
+function labelForExclusivePreset(value, nightFactor) {
+  return labelForPreset(normalizedExclusivePreset(value), nightFactor)
 }
 
 function labelForMode(value) {
@@ -92,7 +138,9 @@ var tweakFields = {
   ],
   sunny: [
     { key: "glow", label: "Glow" },
-    { key: "speed", label: "Speed" }
+    { key: "speed", label: "Speed" },
+    { key: "azimuth", label: "Position" },
+    { key: "distance", label: "Distance" }
   ],
   stormy: [
     { key: "density", label: "Density" },
@@ -113,7 +161,7 @@ function defaultParams() {
     rain: { strength: 1, density: 1, speed: 1, scale: 1 },
     snow: { strength: 1, density: 1, speed: 1, scale: 1 },
     fog: { strength: 1, density: 1, speed: 1 },
-    sunny: { strength: 1, glow: 1, speed: 1 },
+    sunny: { strength: 1, glow: 1, speed: 1, azimuth: 1, distance: 1 },
     stormy: { strength: 1, density: 1, speed: 1, scale: 1, lightning: 1 },
     fire: { strength: 1, density: 1, speed: 1, scale: 1, glow: 1 }
   }
@@ -127,11 +175,18 @@ function fieldsForMode(mode) {
   return tweakFields[normalizedMode(mode)] || []
 }
 
-function clampParam(key, value) {
+function fieldMaximum(mode, key) {
+  var k = String(key || "")
+  if (k === "strength") return 1
+  var m = normalizedMode(mode)
+  if (k === "density" && (m === "rain" || m === "stormy")) return 2.4
+  return 2
+}
+
+function clampParam(key, value, mode) {
   var n = parseFloat(value)
-  if (isNaN(n)) n = key === "strength" ? 1 : 1
-  if (key === "strength") return Math.max(0, Math.min(1, n))
-  return Math.max(0, Math.min(2, n))
+  if (isNaN(n)) n = 1
+  return Math.max(0, Math.min(fieldMaximum(mode, key), n))
 }
 
 function mergeParams(raw) {
@@ -144,7 +199,7 @@ function mergeParams(raw) {
     for (var key in defaults[preset]) {
       out[preset][key] = from[key] === undefined || from[key] === null
         ? defaults[preset][key]
-        : clampParam(key, from[key])
+        : clampParam(key, from[key], preset)
     }
   }
   return out
@@ -157,9 +212,10 @@ function paramValue(params, preset, key, fallback) {
   return isNaN(n) ? fallback : n
 }
 
-function shaderFileForMode(mode, weatherPreset) {
+function shaderFileForMode(mode, weatherPreset, exclusivePreset) {
   var m = normalizedMode(mode)
   if (m === "follow") return shaderFileForPreset(weatherPreset || "sunny")
+  if (m === "exclusive") return shaderFileForPreset(normalizedExclusivePreset(exclusivePreset))
   return shaderFileForPreset(m)
 }
 
