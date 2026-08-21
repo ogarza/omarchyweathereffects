@@ -63,6 +63,28 @@ Item {
 
   property var configuredLocationState: ({ name: "", latitude: null, longitude: null, hasCoordinates: false })
   property int weatherRetries: 0
+  readonly property int weatherResponseMaxBytes: 262144
+
+  function weatherFetchCommand(url, timeoutSec) {
+    return ["bash", "-c",
+      "set -euo pipefail; "
+      + "curl -fsS --max-time \"$1\" --max-filesize \"$2\" -- \"$3\" | head -c \"$2\"",
+      "ogarza.weather-fetch", String(timeoutSec), String(root.weatherResponseMaxBytes), url]
+  }
+
+  function consumeWeatherStdout(raw, parseFn) {
+    raw = String(raw || "")
+    if (raw.length >= root.weatherResponseMaxBytes) {
+      root.scheduleWeatherRetry()
+      return
+    }
+    raw = raw.trim()
+    if (!raw) {
+      root.scheduleWeatherRetry()
+      return
+    }
+    root.applyWeatherPreset(parseFn(raw))
+  }
 
   function configObject() {
     if (pluginRegistry && typeof pluginRegistry.shellConfigProvider === "function")
@@ -172,13 +194,13 @@ Item {
         + "&current=weather_code"
         + "&forecast_days=1"
         + "&timezone=auto"
-      openMeteoProc.command = ["curl", "-fsS", "--max-time", "5", url]
+      openMeteoProc.command = root.weatherFetchCommand(url, 5)
       openMeteoProc.running = true
       return
     }
 
     var query = Model.wttrLocationQuery(root.configuredLocationState.name, root.configuredLocationState.latitude, root.configuredLocationState.longitude)
-    wttrProc.command = ["curl", "-fsS", "--max-time", "10", "https://wttr.in/" + query + "?format=j1"]
+    wttrProc.command = root.weatherFetchCommand("https://wttr.in/" + query + "?format=j1", 10)
     wttrProc.running = true
   }
 
@@ -231,14 +253,7 @@ Item {
     id: openMeteoProc
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: {
-        var raw = String(text || "").trim()
-        if (!raw) {
-          root.scheduleWeatherRetry()
-          return
-        }
-        root.applyWeatherPreset(Model.presetFromOpenMeteoJson(raw))
-      }
+      onStreamFinished: root.consumeWeatherStdout(text, Model.presetFromOpenMeteoJson)
     }
   }
 
@@ -246,14 +261,7 @@ Item {
     id: wttrProc
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: {
-        var raw = String(text || "").trim()
-        if (!raw) {
-          root.scheduleWeatherRetry()
-          return
-        }
-        root.applyWeatherPreset(Model.presetFromWttrJson(raw))
-      }
+      onStreamFinished: root.consumeWeatherStdout(text, Model.presetFromWttrJson)
     }
   }
 
