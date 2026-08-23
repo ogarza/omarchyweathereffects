@@ -95,7 +95,7 @@ void main() {
     const vec3 c6 = vec3(0.9);
 
     float t = time * max(speed, 0.0);
-    float sizeMul = max(scale, 0.05);
+    float sizeMul = max(scale * 0.3, 0.05);
     float dens = clamp(density, 0.0, 2.0);
 
     // Shadertoy-style Y-up pixel coords.

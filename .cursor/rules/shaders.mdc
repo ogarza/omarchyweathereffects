@@ -13,6 +13,8 @@ alwaysApply: false
 - Prefer wiring unused uniforms (`scale`, `glow`, `density`, …) before adding new std140 fields.
 - Rebuild: service `scanShaders` / `/usr/lib/qt6/bin/qsb --qt6 -o file.frag.qsb file.frag`.
 
+Hyprland `decoration.screen_shader` is a separate path (`HyprShader.js`, `#version 300 es`). Do not feed those sources through `qsb` or the Qt std140 block.
+
 ## Qt overlay runtime (hard)
 
 `qsb` succeeding is **not** enough. If the live ShaderEffect rejects the stage, the **whole overlay is blank** (storm rain disappears too). Revert to the last scalar `boltPoint` / `strokeChannel` path in `stormy.frag` rather than iterating.

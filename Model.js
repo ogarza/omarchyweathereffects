@@ -3,10 +3,10 @@
 
 var modes = [
   { value: "none", label: "None", icon: "󰅖", description: "No overlay. The desktop stays clear." },
-  { value: "rain", label: "Rain", icon: "󰖗", description: "Rain on glass: beads, trails, and a cool lens." },
+  { value: "rain", label: "Rain", icon: "󰖗", description: "Rain on glass: beads, trails, and desktop refraction." },
   { value: "snow", label: "Snow", icon: "󰖘", description: "Falling flakes with a bit of depth." },
   { value: "fog", label: "Cloud/Fog", icon: "󰖑", description: "Soft clouds drifting across the sky." },
-  { value: "sunny", label: "Sunny", icon: "󰖙", description: "Warm sun glow, faint shafts, and dust motes." },
+  { value: "sunny", label: "Sunny", icon: "󰖙", description: "Warm sun glow, faint shafts, and dust motes. Optional heat haze." },
   { value: "partly", label: "Partly cloudy", icon: "󰖕", description: "Broken clouds with sun breaking through." },
   { value: "overcast", label: "Overcast", icon: "󰖐", description: "A heavy cloud deck and a faint sun." },
   { value: "sunshower", label: "Sun shower", icon: "󰖖", description: "Sun and rain at the same time. Optional rainbow." },
@@ -14,10 +14,10 @@ var modes = [
   { value: "drizzle", label: "Drizzle", icon: "󰖑", description: "Light rain through a thin haze." },
   { value: "squall", label: "Snow squall", icon: "󰼶", description: "Snow driven through haze." },
   { value: "wintry", label: "Wintry mix", icon: "󰙿", description: "Rain and snow together." },
-  { value: "stormy", label: "Stormy", icon: "󰖓", description: "Diagonal rain, a dark wash, lightning, and a brief sky flash." },
+  { value: "stormy", label: "Stormy", icon: "󰖓", description: "Diagonal rain that refracts the desktop, a dark wash, lightning, and a brief sky flash." },
   { value: "follow", label: "Follow", icon: "󰔏", description: "Matches the live forecast for your Omarchy location." },
   { value: "exclusive", label: "Exclusive", icon: "󰮯", description: "Same forecast as Follow, but only one type is shown." },
-  { value: "fire", label: "Fire", icon: "󰈸", description: "Ground fire along the bottom. Manual only — never used by Follow." },
+  { value: "fire", label: "Fire", icon: "󰈸", description: "Ground fire along the bottom, with optional heat haze. Manual only — never used by Follow." },
   { value: "rainbow", label: "Rainbow", icon: "󰟗", description: "Primary and secondary bows. Manual only — never used by Follow." },
   { value: "custom", label: "Custom", icon: "󰣖", description: "Mix up to three shaders. Set a layer to None to turn it off. Manual only — never used by Follow." }
 ]
@@ -340,6 +340,121 @@ function slotStrength(params, visual, slot, shaderA, shaderB, shaderC) {
   return 0
 }
 
+function layerStrengthForShader(visual, shader, params, shaderA, shaderB, shaderC) {
+  var want = String(shader || "")
+  if (!want) return 0
+  var best = 0
+  for (var slot = 0; slot < 3; slot++) {
+    if (shaderForVisualSlot(visual, slot, shaderA, shaderB, shaderC, params) === want)
+      best = Math.max(best, slotStrength(params, visual, slot, shaderA, shaderB, shaderC))
+  }
+  return best
+}
+
+function rainLayerStrength(visual, params, shaderA, shaderB, shaderC) {
+  return layerStrengthForShader(visual, "rain", params, shaderA, shaderB, shaderC)
+}
+
+function stormLayerStrength(visual, params, shaderA, shaderB, shaderC) {
+  return layerStrengthForShader(visual, "stormy", params, shaderA, shaderB, shaderC)
+}
+
+function rainRefractSource(visual, params, shaderA, shaderB, shaderC) {
+  var rainS = rainLayerStrength(visual, params, shaderA, shaderB, shaderC)
+  var stormS = stormLayerStrength(visual, params, shaderA, shaderB, shaderC)
+  var rainOn = rainS > 0.001 && paramValue(params, "rain", "refract", 1) > 0.001
+  var stormOn = stormS > 0.001 && paramValue(params, "stormy", "refract", 1) > 0.001
+  if (rainOn && stormOn) return rainS >= stormS ? "rain" : "stormy"
+  if (rainOn) return "rain"
+  if (stormOn) return "stormy"
+  return ""
+}
+
+// 90°F in Celsius. Stored unit is always °C; the panel shows °F when locale is imperial.
+var defaultHazeTempC = (90 - 32) * 5 / 9
+
+function celsiusToFahrenheit(c) {
+  return Number(c) * 9 / 5 + 32
+}
+
+function fahrenheitToCelsius(f) {
+  return (Number(f) - 32) * 5 / 9
+}
+
+function localeUsesImperial(localeName) {
+  var name = String(localeName || "").replace(".", "_")
+  return /^en[_-]US($|[_.-])/.test(name) || /^en[_-]LR($|[_.-])/.test(name) || /^my($|[_.-])/.test(name)
+}
+
+function shouldUseImperial(localeName) {
+  return localeUsesImperial(localeName)
+}
+
+function hazeOutdoorGate(outdoorTempC, thresholdC) {
+  var outdoor = parseFloat(outdoorTempC)
+  var need = parseFloat(thresholdC)
+  if (isNaN(outdoor) || isNaN(need)) return 0
+  if (outdoor >= need) return 1
+  return Math.max(0, Math.min(1, (outdoor - (need - 2)) / 2))
+}
+
+function hazeLayerAmounts(visual, params, shaderA, shaderB, shaderC, outdoorTempC) {
+  var sunnyS = layerStrengthForShader(visual, "sunny", params, shaderA, shaderB, shaderC)
+    * paramValue(params, "sunny", "haze", 0)
+    * hazeOutdoorGate(outdoorTempC, paramValue(params, "sunny", "temperature", defaultHazeTempC))
+  var fireS = layerStrengthForShader(visual, "fire", params, shaderA, shaderB, shaderC)
+    * paramValue(params, "fire", "haze", 0)
+  var fireHaze = fireS > 0 && fireS >= sunnyS
+  return {
+    sunny: sunnyS,
+    fire: fireS,
+    amount: Math.max(sunnyS, fireS),
+    fireHaze: fireHaze
+  }
+}
+
+function screenShaderKind(visual, params, shaderA, shaderB, shaderC, outdoorTempC) {
+  var parts = []
+  var rainOn = rainRefractSource(visual, params, shaderA, shaderB, shaderC) !== ""
+  var hazeOn = hazeLayerAmounts(visual, params, shaderA, shaderB, shaderC, outdoorTempC).amount > 0.001
+  if (rainOn) parts.push("rain")
+  if (hazeOn) parts.push("haze")
+  return parts.join("+")
+}
+
+function visualNeedsScreenShader(visual, params, shaderA, shaderB, shaderC, outdoorTempC) {
+  return screenShaderKind(visual, params, shaderA, shaderB, shaderC, outdoorTempC) !== ""
+}
+
+function hyprShaderInput(visual, params, quality, shaderA, shaderB, shaderC, pixelRatio, outdoorTempC) {
+  var kind = screenShaderKind(visual, params, shaderA, shaderB, shaderC, outdoorTempC)
+  var haze = hazeLayerAmounts(visual, params, shaderA, shaderB, shaderC, outdoorTempC)
+  var rainSrc = rainRefractSource(visual, params, shaderA, shaderB, shaderC)
+  var stormRain = rainSrc === "stormy"
+  var rainPreset = stormRain ? "stormy" : "rain"
+  return {
+    kind: kind,
+    density: paramValue(params, rainPreset, "density", stormRain ? 1 : 0.8),
+    speed: paramValue(params, rainPreset, "speed", stormRain ? 1.15 : 1),
+    scale: paramValue(params, rainPreset, "scale", 1),
+    glow: stormRain ? paramValue(params, "stormy", "sheen", 0.6) : paramValue(params, "rain", "glow", 0.6),
+    strength: stormRain
+      ? stormLayerStrength(visual, params, shaderA, shaderB, shaderC)
+      : rainLayerStrength(visual, params, shaderA, shaderB, shaderC),
+    refract: paramValue(params, rainPreset, "refract", 1),
+    quality: qualityRank(quality),
+    haze: haze.amount,
+    fireHaze: haze.fireHaze,
+    pixelRatio: pixelRatio,
+    stormRain: stormRain,
+    azimuth: paramValue(params, "stormy", "azimuth", 1)
+  }
+}
+
+function sunnyHazeWanted(params) {
+  return paramValue(params, "sunny", "haze", 0) > 0.001
+}
+
 function normalizedMode(value) {
   var v = String(value || "").replace(/^\s+|\s+$/g, "").toLowerCase()
   if (v === "cloud" || v === "cloud/fog" || v === "cloud-fog" || v === "clouds") return "fog"
@@ -452,7 +567,8 @@ var tweakFields = {
     { key: "density", label: "Density", kind: "slider", max: 2.4 },
     { key: "speed", label: "Speed", kind: "slider", max: 2 },
     { key: "scale", label: "Scale", kind: "slider", max: 1 },
-    { key: "glow", label: "Sheen", kind: "slider", max: 2 }
+    { key: "glow", label: "Sheen", kind: "slider", max: 2 },
+    { key: "refract", label: "Refract", kind: "slider", max: 1 }
   ],
   snow: [
     { key: "density", label: "Density", kind: "slider", max: 2 },
@@ -470,12 +586,16 @@ var tweakFields = {
     { key: "speed", label: "Speed", kind: "slider", max: 2 },
     { key: "density", label: "Dust", kind: "slider", max: 2 },
     { key: "azimuth", label: "Position", kind: "slider", max: 2 },
-    { key: "distance", label: "Distance", kind: "slider", max: 2 }
+    { key: "distance", label: "Distance", kind: "slider", max: 2 },
+    { key: "haze", label: "Haze", kind: "slider", max: 1 },
+    { key: "temperature", label: "On above", kind: "slider", format: "temp", min: 10, max: 49 }
   ],
   stormy: [
     { key: "density", label: "Density", kind: "slider", max: 2.4 },
     { key: "speed", label: "Speed", kind: "slider", max: 2 },
     { key: "scale", label: "Scale", kind: "slider", max: 1 },
+    { key: "sheen", label: "Sheen", kind: "slider", max: 2 },
+    { key: "refract", label: "Refract", kind: "slider", max: 1 },
     { key: "lightning", label: "Flash", kind: "slider", max: 2 },
     { key: "frequency", label: "Frequency", kind: "slider", max: 2 },
     { key: "glow", label: "Gloom", kind: "slider", max: 2 },
@@ -485,7 +605,8 @@ var tweakFields = {
     { key: "density", label: "Density", kind: "slider", max: 2 },
     { key: "speed", label: "Speed", kind: "slider", max: 2 },
     { key: "scale", label: "Scale", kind: "slider", max: 2 },
-    { key: "glow", label: "Glow", kind: "slider", max: 2 }
+    { key: "glow", label: "Glow", kind: "slider", max: 2 },
+    { key: "haze", label: "Haze", kind: "slider", max: 1 }
   ],
   rainbow: [
     { key: "glow", label: "Glow", kind: "slider", max: 2 },
@@ -500,12 +621,12 @@ var tweakFields = {
 
 function defaultParams() {
   var out = {
-    rain: { strength: 1, density: 0.8, speed: 1, scale: 1, glow: 0.5, enableC: 0, strengthC: 0.65 },
+    rain: { strength: 1, density: 0.8, speed: 1, scale: 1, glow: 0.6, refract: 1, enableC: 0, strengthC: 0.65 },
     snow: { strength: 1, density: 0.8, speed: 1, scale: 0.8, glow: 0.3, enableC: 0, strengthC: 0.65 },
     fog: { strength: 1, density: 1, speed: 0.9, scale: 1, enableC: 0, strengthC: 0.65 },
-    sunny: { strength: 1, glow: 1, speed: 1, density: 1.2, azimuth: 1.2, distance: 1, enableC: 0, strengthC: 0.65 },
-    stormy: { strength: 1, density: 1, speed: 1.15, scale: 1, lightning: 1.5, frequency: 1, glow: 1, azimuth: 1, enableC: 0, strengthC: 0.65 },
-    fire: { strength: 1, density: 1, speed: 0.5, scale: 1, glow: 1, enableC: 0, strengthC: 0.65 },
+    sunny: { strength: 1, glow: 1, speed: 1, density: 1.2, azimuth: 1.2, distance: 1, haze: 0.5, temperature: defaultHazeTempC, enableC: 0, strengthC: 0.65 },
+    stormy: { strength: 1, density: 1, speed: 1.15, scale: 1, sheen: 0.6, refract: 1, lightning: 1.5, frequency: 1, glow: 1, azimuth: 1, enableC: 0, strengthC: 0.65 },
+    fire: { strength: 1, density: 1, speed: 0.5, scale: 1, glow: 1, haze: 0.5, enableC: 0, strengthC: 0.65 },
     rainbow: { strength: 1, glow: 1, density: 1, scale: 1, azimuth: 0.8, lightning: 0.65, distance: 1, speed: 1 }
   }
   for (var id in mixRecipes) {
@@ -525,6 +646,7 @@ function cloneField(field, preset, label) {
     key: field.key,
     label: label || field.label,
     kind: field.kind || "slider",
+    format: field.format,
     min: field.min,
     max: field.max,
     preset: preset
@@ -650,6 +772,8 @@ function fieldsForMode(mode) {
 function fieldMaximum(mode, key) {
   var k = String(key || "")
   if (k === "strength" || k === "strengthA" || k === "strengthB" || k === "strengthC" || k === "enableC") return 1
+  if (k === "refract" || k === "haze") return 1
+  if (k === "temperature") return 49
   var fields = tweakFields[normalizedMode(mode)] || []
   for (var i = 0; i < fields.length; i++) {
     if (fields[i].key === k && fields[i].max) return fields[i].max
@@ -673,6 +797,7 @@ function fieldMinimum(mode, key) {
 function fieldNudgeStep(field) {
   if (!field) return 0.1
   if (field.kind === "check") return 1
+  if (field.format === "temp" || field.key === "temperature") return 1
   if (field.key === "strength" || field.key === "strengthA" || field.key === "strengthB" || field.key === "strengthC") return 0.05
   return 0.1
 }
@@ -682,8 +807,11 @@ function clampParam(key, value, mode) {
   if (isNaN(n)) {
     if (key === "enableC") n = 0
     else if (key === "strengthA" || key === "strengthB" || key === "strengthC") n = 0.5
+    else if (key === "temperature") n = defaultHazeTempC
     else n = 1
   }
+  if (key === "temperature" && n <= 1)
+    n = defaultHazeTempC
   if (key === "enableC") return n >= 0.5 ? 1 : 0
   return Math.max(fieldMinimum(mode, key), Math.min(fieldMaximum(mode, key), n))
 }
@@ -722,6 +850,34 @@ function displayNameForShader(filename) {
   var name = String(filename || "").replace(/^.*\//, "")
   name = name.replace(/\.frag\.qsb$/i, "").replace(/\.qsb$/i, "").replace(/\.frag$/i, "")
   return name
+}
+
+function parseHyprShaderRivals(raw) {
+  var lines = String(raw || "").split("\n")
+  var out = []
+  var seen = {}
+  for (var i = 0; i < lines.length; i++) {
+    var line = String(lines[i] || "").replace(/^\s+|\s+$/g, "")
+    if (!line) continue
+    var tab = line.indexOf("\t")
+    var id = tab >= 0 ? line.substring(0, tab) : line
+    var name = tab >= 0 ? line.substring(tab + 1) : id
+    if (!id || seen[id]) continue
+    seen[id] = true
+    out.push({ id: id, name: name || id })
+  }
+  return out
+}
+
+function hyprShaderRivalWarning(rivals) {
+  var list = rivals || []
+  if (!list.length) return ""
+  var names = []
+  for (var i = 0; i < list.length; i++)
+    names.push(list[i].name || list[i].id)
+  var who = names.length === 1 ? names[0] : names.slice(0, -1).join(", ") + " and " + names[names.length - 1]
+  return "Hyprland only has one screen shader. " + who
+    + " also apply one, so rain refraction and haze may lose if that plugin applied last."
 }
 
 function shaderFilesFromListing(raw) {
@@ -863,6 +1019,30 @@ function presetForWttrCode(code) {
   if (c === 299 || c === 302 || c === 305 || c === 308 || c === 356 || c === 359) return "rain"
   if (c === 329 || c === 332 || c === 335 || c === 338 || c === 371) return "squall"
   return "overcast"
+}
+
+function tempCFromOpenMeteoJson(raw) {
+  try {
+    var data = JSON.parse(String(raw || ""))
+    var current = data && data.current ? data.current : null
+    if (!current) return NaN
+    var t = parseFloat(current.temperature_2m)
+    return isNaN(t) ? NaN : t
+  } catch (e) {
+    return NaN
+  }
+}
+
+function tempCFromWttrJson(raw) {
+  try {
+    var data = JSON.parse(String(raw || ""))
+    var current = data && data.current_condition && data.current_condition[0] ? data.current_condition[0] : null
+    if (!current) return NaN
+    var t = parseFloat(current.temp_C)
+    return isNaN(t) ? NaN : t
+  } catch (e) {
+    return NaN
+  }
 }
 
 function presetFromOpenMeteoJson(raw) {

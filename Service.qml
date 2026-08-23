@@ -1,10 +1,12 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.Ui
 import qs.Commons
 import "Model.js" as Model
+import "HyprShader.js" as HyprShader
 
 Item {
   id: root
@@ -14,6 +16,9 @@ Item {
   property var pluginRegistry: null
 
   readonly property string pluginId: "ogarza.weather"
+  readonly property string home: Quickshell.env("HOME")
+  readonly property string hyprStateRoot: (Quickshell.env("XDG_STATE_HOME") || (home + "/.local/state")) + "/ogarza.weather"
+  readonly property string hyprShaderPath: hyprStateRoot + "/current.frag"
   property bool active: false
   property string mode: "none"
   property string weatherPreset: ""
@@ -22,9 +27,12 @@ Item {
   property string customShaderB: "fog"
   property string customShaderC: "none"
   property string quality: "high"
+  property bool hyprEnabled: true
   readonly property real qualityScale: Model.qualityScale(root.quality)
   readonly property bool qualityDownscale: root.quality !== "extreme"
   property var shaderFiles: []
+  property var hyprShaderRivals: []
+  readonly property string hyprShaderRivalWarning: Model.hyprShaderRivalWarning(root.hyprShaderRivals)
   property var params: Model.mergeParams(null)
   property bool panelOpen: false
 
@@ -41,6 +49,23 @@ Item {
   readonly property bool exclusivePreview: root.mode === "exclusive" && root.panelOpen
 
   property bool persistLoaded: false
+  property int hyprBaseDamage: -1
+  property bool hyprApplied: false
+  property int hyprGeneration: 0
+  property int hyprAppliedGeneration: 0
+
+  readonly property real hyprPixelRatio: {
+    var screens = Quickshell.screens
+    var dpr = 1
+    if (screens) {
+      for (var i = 0; i < screens.length; i++) {
+        var scr = screens[i]
+        if (scr && scr.devicePixelRatio)
+          dpr = Math.max(dpr, Number(scr.devicePixelRatio))
+      }
+    }
+    return Math.max(1, dpr)
+  }
 
   readonly property bool overlayWanted: {
     if (!root.persistLoaded) return false
@@ -53,6 +78,15 @@ Item {
 
   readonly property bool overlayVisible: root.overlayWanted
     || (overlayFade.running && (Model.isVisualPreset(root.overlayFromPreset) || Model.isVisualPreset(root.overlayToPreset)))
+
+  readonly property string hyprKind: Model.screenShaderKind(
+    root.overlayToPreset, root.params, root.customShaderA, root.customShaderB, root.customShaderC, root.outdoorTempC)
+
+  readonly property bool needsScreenShader: root.persistLoaded && root.hyprEnabled && root.overlayWanted && root.hyprKind !== ""
+
+  readonly property bool hyprRainLive: root.needsScreenShader && root.hyprKind.indexOf("rain") !== -1
+
+  readonly property bool hyprTick: root.needsScreenShader || root.hyprApplied
 
   readonly property string effectivePreset: {
     if (root.mode === "follow") return root.weatherPreset || "sunny"
@@ -166,7 +200,12 @@ Item {
       primed: root.overlayPrimed,
       quality: root.quality,
       scale: root.qualityScale,
-      active: root.active
+      active: root.active,
+      hyprEnabled: root.hyprEnabled,
+      hypr: root.hyprKind,
+      hyprApplied: root.hyprApplied,
+      hyprDamage: root.needsScreenShader ? 0 : root.hyprBaseDamage,
+      outdoorC: isNaN(root.outdoorTempC) ? null : Math.round(root.outdoorTempC * 10) / 10
     })
   }
 
@@ -249,6 +288,8 @@ Item {
   property string weatherSource: ""
   property int weatherRetries: 0
   property real nightFactor: 0
+  property real outdoorTempC: NaN
+  readonly property bool needsOutdoorTemp: Model.sunnyHazeWanted(root.params)
   readonly property int weatherResponseMaxBytes: 262144
 
   function weatherFetchCommand(url, timeoutSec) {
@@ -269,7 +310,10 @@ Item {
       root.scheduleWeatherRetry()
       return
     }
-    root.applyWeatherPreset(Model.followDayNightPreset(parseFn(raw), root.nightFactor), source)
+    var tempC = source === "wttr" ? Model.tempCFromWttrJson(raw) : Model.tempCFromOpenMeteoJson(raw)
+    if (!isNaN(tempC)) root.outdoorTempC = tempC
+    if (root.liveWeatherMode)
+      root.applyWeatherPreset(Model.followDayNightPreset(parseFn(raw), root.nightFactor), source)
   }
 
   function configObject() {
@@ -302,10 +346,15 @@ Item {
       else
         root.customShaderC = Model.normalizedCustomLayer(entry.customShaderC, "none")
       root.quality = Model.normalizedQuality(entry.quality)
+      root.hyprEnabled = entry.hyprEnabled !== false
       root.params = Model.mergeParams(entry.params)
+      if (typeof entry.hyprBaseDamage === "number")
+        root.hyprBaseDamage = entry.hyprBaseDamage
     }
     root.persistLoaded = true
-    if (root.liveWeatherMode) Qt.callLater(root.refreshWeather)
+    if (root.hyprBaseDamage < 0) baselineProc.running = true
+    else root.scheduleHyprSync()
+    if (root.liveWeatherMode || root.needsOutdoorTemp) Qt.callLater(root.refreshWeather)
   }
 
   function persistSettings() {
@@ -322,9 +371,87 @@ Item {
     settings.customShaderB = root.customShaderB
     settings.customShaderC = root.customShaderC
     settings.quality = root.quality
+    settings.hyprEnabled = root.hyprEnabled
     settings.params = root.params
+    settings.hyprBaseDamage = root.hyprBaseDamage
     delete settings.customShader
     shell.updateEntryInline(pluginId, settings)
+  }
+
+  function parseOnOffToggle(raw, current) {
+    var v = String(raw || "").replace(/^\s+|\s+$/g, "").toLowerCase()
+    if (!v) return current
+    if (v === "toggle") return !current
+    if (v === "off" || v === "0" || v === "false" || v === "no") return false
+    if (v === "on" || v === "1" || v === "true" || v === "yes") return true
+    return current
+  }
+
+  function parseIpcParam(preset, key, raw) {
+    var text = String(raw || "").replace(/^\s+|\s+$/g, "")
+    var k = String(key || "")
+    if (k === "enableC") return root.parseOnOffToggle(text, false) ? 1 : 0
+    var lower = text.toLowerCase()
+    if (k === "temperature") {
+      var imperial = /f$/.test(lower)
+      var n = parseFloat(text)
+      if (isNaN(n)) return Model.paramValue(root.params, preset, k, 32.2)
+      if (imperial || n > 49) return (n - 32) * 5 / 9
+      return n
+    }
+    if (/%$/.test(text)) return parseFloat(text) / 100
+    return parseFloat(text)
+  }
+
+  function ipcPower(raw) {
+    root.setActive(root.parseOnOffToggle(raw, root.active))
+    return root.active ? "on" : "off"
+  }
+
+  function ipcMode(raw) {
+    if (!String(raw || "").replace(/^\s+|\s+$/g, "")) return root.mode
+    root.setMode(raw)
+    return root.mode
+  }
+
+  function ipcTrack(raw) {
+    if (!String(raw || "").replace(/^\s+|\s+$/g, "")) return root.exclusivePreset
+    root.setExclusivePreset(raw)
+    return root.exclusivePreset
+  }
+
+  function ipcLayer(slotRaw, shader) {
+    var s = String(slotRaw || "").replace(/^\s+|\s+$/g, "").toLowerCase()
+    var slot = 0
+    if (s === "b" || s === "1") slot = 1
+    else if (s === "c" || s === "2") slot = 2
+    else if (s === "a" || s === "0" || s === "") slot = 0
+    else return "unknown-layer"
+    var current = slot === 2 ? root.customShaderC : (slot === 1 ? root.customShaderB : root.customShaderA)
+    if (!String(shader || "").replace(/^\s+|\s+$/g, "")) return current
+    root.setCustomShader(slot, shader)
+    return slot === 2 ? root.customShaderC : (slot === 1 ? root.customShaderB : root.customShaderA)
+  }
+
+  function ipcParam(preset, key, value) {
+    var mode = Model.normalizedMode(preset)
+    if (!preset || !Model.hasTweaks(mode)) return "unknown-preset"
+    var k = String(key || "")
+    if (!k) return JSON.stringify(root.params[mode] || {})
+    if (!String(value || "").replace(/^\s+|\s+$/g, ""))
+      return String(Model.paramValue(root.params, mode, k, k === "enableC" ? 0 : 1))
+    root.setParam(mode, k, root.parseIpcParam(mode, k, value), true)
+    return String(Model.paramValue(root.params, mode, k, k === "enableC" ? 0 : 1))
+  }
+
+  function ipcReset() {
+    root.resetParams()
+    return "ok"
+  }
+
+  function ipcRefresh() {
+    root.refreshWeather()
+    return root.weatherPreset || "pending"
   }
 
   function resetParams() {
@@ -371,6 +498,13 @@ Item {
     var next = Model.normalizedQuality(value)
     if (root.quality === next) return
     root.quality = next
+    persistSettings()
+  }
+
+  function setHyprEnabled(value) {
+    var next = !!value
+    if (root.hyprEnabled === next) return
+    root.hyprEnabled = next
     persistSettings()
   }
 
@@ -423,10 +557,29 @@ Item {
       + "done; for f in \"$dir\"/*.qsb; do basename -- \"$f\"; done",
       "ogarza.weather-scan", dir]
     scanProc.running = true
+    root.scanHyprRivals()
+  }
+
+  function scanHyprRivals() {
+    if (hyprRivalProc.running) return
+    var dir = root.home + "/.config/omarchy/plugins"
+    hyprRivalProc.command = ["bash", "-c",
+      "root=\"$1\"; self=\"$2\"; shopt -s nullglob; "
+      + "for dir in \"$root\"/*/; do "
+      + "id=\"${dir%/}\"; id=\"${id##*/}\"; "
+      + "case \"$id\" in \"$self\"|.*|*.bak*) continue ;; esac; "
+      + "if grep -RIl --include='*.qml' --include='*.js' 'screen_shader' \"$dir\" >/dev/null 2>&1; then "
+      + "name=\"$id\"; man=\"$dir/manifest.json\"; "
+      + "if [[ -f \"$man\" ]]; then "
+      + "n=$(sed -n 's/.*\"name\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p' \"$man\" | head -1); "
+      + "[[ -n \"$n\" ]] && name=\"$n\"; fi; "
+      + "printf '%s\\t%s\\n' \"$id\" \"$name\"; fi; done",
+      "ogarza.weather-hypr-rivals", dir, root.pluginId]
+    hyprRivalProc.running = true
   }
 
   function refreshWeather() {
-    if (!root.liveWeatherMode) return
+    if (!root.liveWeatherMode && !root.needsOutdoorTemp) return
     if (!root.locationReady) return
 
     var lat = parseFloat(String(root.configuredLocationState.latitude))
@@ -436,7 +589,7 @@ Item {
       var url = "https://api.open-meteo.com/v1/forecast"
         + "?latitude=" + encodeURIComponent(String(lat))
         + "&longitude=" + encodeURIComponent(String(lon))
-        + "&current=weather_code"
+        + "&current=weather_code,temperature_2m"
         + "&forecast_days=1"
         + "&timezone=auto"
       openMeteoProc.command = root.weatherFetchCommand(url, 5)
@@ -456,6 +609,7 @@ Item {
     if (from === "wttr" && root.weatherSource === "open-meteo")
       return
     if (next === "") {
+      if (!root.liveWeatherMode) return
       root.scheduleWeatherRetry()
       return
     }
@@ -475,6 +629,71 @@ Item {
     weatherRetryTimer.restart()
   }
 
+  // Omarchy's Lua parser: hyprctl keyword fails. One eval, two statements,
+  // damage first — two processes race, and Lua table key order is unspecified.
+  function hypr(lua) {
+    Quickshell.execDetached(["hyprctl", "eval", lua])
+  }
+
+  function applyHypr(damage, shader) {
+    root.hypr('hl.config({ debug = { damage_tracking = ' + Math.round(damage) + ' } }); '
+      + 'hl.config({ decoration = { screen_shader = "' + shader + '" } })')
+  }
+
+  function hyprInput() {
+    return Model.hyprShaderInput(
+      root.overlayToPreset,
+      root.params,
+      root.quality,
+      root.customShaderA,
+      root.customShaderB,
+      root.customShaderC,
+      root.hyprPixelRatio,
+      root.outdoorTempC
+    )
+  }
+
+  function scheduleHyprSync() {
+    hyprSyncTimer.restart()
+  }
+
+  function renderHypr() {
+    if (!root.persistLoaded) return
+    if (!root.needsScreenShader) {
+      if (root.hyprApplied) root.clearHyprShader()
+      return
+    }
+    var src = HyprShader.build(root.hyprInput())
+    if (!src) {
+      if (root.hyprApplied) root.clearHyprShader()
+      return
+    }
+    root.hyprGeneration += 1
+    hyprShaderFile.setText(src)
+    hyprApplyFallback.restart()
+  }
+
+  function applyHyprRendered() {
+    if (root.hyprAppliedGeneration === root.hyprGeneration) return
+    if (!root.needsScreenShader) return
+    root.hyprAppliedGeneration = root.hyprGeneration
+    hyprApplyFallback.stop()
+    root.applyHypr(0, root.hyprShaderPath)
+    root.hyprApplied = true
+  }
+
+  function clearHyprShader() {
+    hyprApplyFallback.stop()
+    root.applyHypr(1, "")
+    root.hyprApplied = false
+    restoreDamageTimer.restart()
+  }
+
+  function reapplyHypr() {
+    if (!root.needsScreenShader || !root.hyprApplied) return
+    root.applyHypr(0, root.hyprShaderPath)
+  }
+
   // createObject() runs onCompleted before the shell injects pluginRegistry.
   onPluginRegistryChanged: loadPersisted()
   onShellChanged: loadPersisted()
@@ -487,11 +706,22 @@ Item {
   onEffectivePresetChanged: root.syncOverlayLayers()
   onModeChanged: root.syncOverlayLayers()
   onOverlayWantedChanged: root.syncOverlayLayers()
+  onNeedsScreenShaderChanged: root.scheduleHyprSync()
+  onOverlayToPresetChanged: root.scheduleHyprSync()
+  onParamsChanged: root.scheduleHyprSync()
+  onQualityChanged: root.scheduleHyprSync()
+  onOutdoorTempCChanged: root.scheduleHyprSync()
+  onNeedsOutdoorTempChanged: if (root.needsOutdoorTemp) root.refreshWeather()
+  onCustomShaderAChanged: root.scheduleHyprSync()
+  onCustomShaderBChanged: root.scheduleHyprSync()
+  onCustomShaderCChanged: root.scheduleHyprSync()
   Component.onCompleted: {
     scanShaders()
+    ensureHyprStateDir.running = true
     Qt.callLater(function() {
       if (!root.persistLoaded) root.persistLoaded = true
       root.syncOverlayLayers()
+      root.scheduleHyprSync()
     })
   }
 
@@ -516,7 +746,7 @@ Item {
 
     anchors.fill: parent
     blending: true
-    visible: fade > 0.001 && shaderFile !== ""
+    visible: fade > 0.001 && shaderFile !== "" && !(preset === "rain" && root.hyprRainLive)
     opacity: Math.max(0, Math.min(1, fade))
     fragmentShader: shaderFile !== "" ? Qt.resolvedUrl("shaders/" + shaderFile) : ""
     property real time: clock.elapsedTime
@@ -527,10 +757,14 @@ Item {
       return Math.max(1.0, dpr * root.qualityScale)
     }
     property real strength: Model.slotStrength(root.params, visual, slot, root.customShaderA, root.customShaderB, root.customShaderC)
-    property real density: Model.paramValue(root.params, preset || "rain", "density", 1)
+    property real density: {
+      if (preset === "stormy" && root.hyprRainLive) return 0
+      return Model.paramValue(root.params, preset || "rain", "density", 1)
+    }
     property real speed: Model.paramValue(root.params, preset || "rain", "speed", 1)
     property real scale: Model.paramValue(root.params, preset || "rain", "scale", 1)
     property real glow: Model.paramValue(root.params, preset || "sunny", "glow", 1)
+    property real sheen: Model.paramValue(root.params, preset === "stormy" ? "stormy" : "rain", "sheen", 0.6)
     property real lightning: Model.paramValue(root.params, preset || "stormy", "lightning", 1)
     property real frequency: Model.paramValue(root.params, preset || "stormy", "frequency", 1)
     property real azimuth: Model.paramValue(
@@ -563,12 +797,12 @@ Item {
       root.configuredLocationState = Model.parseLocationFile(text())
       root.weatherRetries = 0
       root.locationReady = true
-      if (root.liveWeatherMode) root.refreshWeather()
+      if (root.liveWeatherMode || root.needsOutdoorTemp) root.refreshWeather()
     }
     onLoadFailed: {
       root.configuredLocationState = Model.parseLocationFile("")
       root.locationReady = true
-      if (root.liveWeatherMode) root.refreshWeather()
+      if (root.liveWeatherMode || root.needsOutdoorTemp) root.refreshWeather()
     }
   }
 
@@ -577,6 +811,14 @@ Item {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.shaderFiles = Model.shaderFilesFromListing(text)
+    }
+  }
+
+  Process {
+    id: hyprRivalProc
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.hyprShaderRivals = Model.parseHyprShaderRivals(text)
     }
   }
 
@@ -599,12 +841,12 @@ Item {
   Timer {
     id: weatherRetryTimer
     interval: 2500
-    onTriggered: if (root.liveWeatherMode) root.refreshWeather()
+    onTriggered: if (root.liveWeatherMode || root.needsOutdoorTemp) root.refreshWeather()
   }
 
   Timer {
     interval: 15 * 60 * 1000
-    running: root.liveWeatherMode
+    running: root.liveWeatherMode || root.needsOutdoorTemp
     repeat: true
     onTriggered: {
       root.weatherRetries = 0
@@ -623,6 +865,102 @@ Item {
   FrameAnimation {
     id: clock
     running: root.overlayVisible
+  }
+
+  Process {
+    id: ensureHyprStateDir
+    command: ["mkdir", "-p", root.hyprStateRoot]
+    running: false
+    onExited: root.scheduleHyprSync()
+  }
+
+  Process {
+    id: baselineProc
+    running: false
+    command: ["bash", "-c",
+      "hyprctl getoption debug:damage_tracking -j | grep -o '\"int\": *[0-9-]*' | grep -o '[0-9-]*$'"]
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var v = parseInt(String(text || "").trim(), 10)
+        if (root.hyprBaseDamage >= 0) return
+        if (isNaN(v) || v < 0 || v === 0) root.hyprBaseDamage = 2
+        else root.hyprBaseDamage = v
+        root.persistSettings()
+        root.scheduleHyprSync()
+      }
+    }
+  }
+
+  FileView {
+    id: hyprShaderFile
+    path: root.hyprShaderPath
+    watchChanges: false
+    atomicWrites: true
+    printErrors: false
+    onSaved: root.applyHyprRendered()
+  }
+
+  Timer {
+    id: hyprSyncTimer
+    interval: 120
+    repeat: false
+    onTriggered: root.renderHypr()
+  }
+
+  Timer {
+    id: hyprApplyFallback
+    interval: 90
+    repeat: false
+    onTriggered: root.applyHyprRendered()
+  }
+
+  Timer {
+    id: restoreDamageTimer
+    interval: 120
+    repeat: false
+    onTriggered: {
+      if (root.needsScreenShader) return
+      root.applyHypr(root.hyprBaseDamage >= 0 ? root.hyprBaseDamage : 2, "")
+    }
+  }
+
+  Connections {
+    target: Hyprland
+    function onRawEvent(event) {
+      if (String(event && event.name ? event.name : "") === "configreloaded")
+        root.scheduleHyprSync()
+    }
+  }
+
+  Variants {
+    model: Quickshell.screens
+    PanelWindow {
+      required property var modelData
+      screen: modelData
+      visible: root.hyprTick
+      color: "transparent"
+      anchors { top: true; left: true }
+      implicitWidth: 1
+      implicitHeight: 1
+      exclusiveZone: 0
+      exclusionMode: ExclusionMode.Ignore
+      WlrLayershell.namespace: "ogarza-weather-tick"
+      WlrLayershell.layer: WlrLayer.Overlay
+      WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+      mask: Region {}
+
+      Rectangle {
+        anchors.fill: parent
+        color: ticker.odd ? "#01ffffff" : "#02ffffff"
+      }
+
+      FrameAnimation {
+        id: ticker
+        running: root.hyprTick
+        property bool odd: false
+        onTriggered: ticker.odd = !ticker.odd
+      }
+    }
   }
 
   Variants {

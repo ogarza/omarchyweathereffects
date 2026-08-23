@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "ogarza.weather",
   "name": "Omarchy Weather Effects",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "author": "ogarza",
-  "description": "Fullscreen weather overlays with quality scaling, mixes, follow-mode fades, and live Open-Meteo",
+  "description": "Fullscreen weather overlays with desktop refraction, quality scaling, mixes, follow-mode fades, and live Open-Meteo",
   "kinds": ["service", "bar-widget"],
   "entryPoints": {
     "service": "Service.qml",
