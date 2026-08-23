@@ -24,7 +24,7 @@ omarchy plugin update ogarza.weather
 
 ### Uninstall
 
-If the overlay or desktop warp was on when you removed the plugin, Hyprland can keep the last screen shader until you clear it. Settings live in the Omarchy shell plugin entry (not this repo). Generated files sit under the state directory.
+If the overlay or Hyprland distortion was on when you removed the plugin, Hyprland can keep the last screen shader until you clear it. Settings live in the Omarchy shell plugin entry (not this repo). Generated files sit under the state directory.
 
 ```bash
 omarchy plugin remove ogarza.weather
@@ -44,7 +44,7 @@ The last two lines drop a leftover Hyprland shader and put damage tracking back 
 
 **Quality** (Low, Medium, High, Extreme) trades sharpness for cost. High is the default and looks good on most machines. Extreme is full resolution and a bit more shader work. If the desktop feels heavy, drop quality first.
 
-**Desktop warp** is a global switch for Hyprland refraction and haze. On (the default) warps the real desktop. Off leaves those sliders alone but uses the painted overlay only, and clears the Hyprland shader if this plugin had applied it.
+**Hyprland distortion** is a global switch for refraction and haze. On (the default) warps the real desktop. Off leaves those sliders alone but uses the painted overlay only, and clears the Hyprland shader if this plugin had applied it.
 
 Mode changes in the panel fade over about two seconds. Follow fades forecast changes over about ten.
 
@@ -125,11 +125,11 @@ omarchy-shell ogarza.weather <command> [args]
 | `track` / `exclusive` `[preset]` | Exclusive **Track only** (`rain`, `stormy`, …). No argument prints the current preset |
 | `layer` `<a\|b\|c>` `[shader]` | Custom layer shader (`none` turns a slot off). No shader prints the current pick |
 | `param` `<preset>` `<key>` `[value]` | Read or set a slider. Value is the stored number, or a percent (`80%`). `enableC` is `on`/`off`. Temperature is °C, or °F with an `F` suffix |
-| `reset` | Restore every mode’s sliders (does not change mode, quality, or desktop warp) |
+| `reset` | Restore every mode’s sliders (does not change mode, quality, or Hyprland distortion) |
 | `refresh` | Fetch Follow / Exclusive weather again |
 | `preview <preset>` | Switch to Follow and fade to that look |
 | `quality` `[level]` | Set `low`, `medium`, `high`, or `extreme`. No argument prints the current level |
-| `hypr` `[on\|off\|toggle]` | Desktop warp. No argument prints `on` or `off` |
+| `hypr` `[on\|off\|toggle]` | Hyprland distortion. No argument prints `on` or `off` |
 | `overlay` | Print compositor state (JSON) |
 
 Examples:
@@ -152,7 +152,7 @@ IPC `toggle` is the panel. `power` is the overlay.
 
 ## Desktop refraction (Hyprland)
 
-With **Desktop warp** on, Rain or Stormy with **Refract** above 0, and Sunny or Fire with **Haze** above 0, apply a Hyprland screen shader at runtime. Hyprland only has one of those. If another plugin (Phosphor, for example) also sets it, whichever applied last wins.
+With **Hyprland distortion** on, Rain or Stormy with **Refract** above 0, and Sunny or Fire with **Haze** above 0, apply a Hyprland screen shader at runtime. Hyprland only has one of those. If another plugin (Phosphor, for example) also sets it, whichever applied last wins.
 
 On load and when the panel opens, this plugin scans the other folders under `~/.config/omarchy/plugins` for `.qml` / `.js` that mention `screen_shader`. It skips its own folder. If it finds a sibling, the panel shows a warning with that plugin’s name from `manifest.json`. It does not disable the other plugin or fight for the slot — it is only a heads-up that refraction or haze may disappear if the other shader applied last.
 

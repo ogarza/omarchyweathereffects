@@ -581,27 +581,13 @@ Panel {
                 foreground: root.foreground
               }
 
-              Column {
-                width: parent.width - hyprSwitch.width - Style.space(12)
-                spacing: Style.space(2)
-
-                Text {
-                  width: parent.width
-                  text: "Desktop warp"
-                  color: root.dim
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  font.bold: true
-                }
-
-                Text {
-                  width: parent.width
-                  text: "Hyprland refraction and haze. Off uses the painted overlay only."
-                  color: root.dim
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  wrapMode: Text.WordWrap
-                }
+              Text {
+                text: "Hyprland distortion"
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                anchors.verticalCenter: parent.verticalCenter
               }
             }
           }
