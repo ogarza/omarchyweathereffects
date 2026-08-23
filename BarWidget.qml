@@ -54,8 +54,40 @@ BarWidget {
     }
     function quality(level: string): string {
       if (!root.fx || typeof root.fx.setQuality !== "function") return "no-service"
-      root.fx.setQuality(level)
+      if (String(level || "")) root.fx.setQuality(level)
       return root.fx.quality
+    }
+    function hypr(value: string): string {
+      if (!root.fx || typeof root.fx.setHyprEnabled !== "function") return "no-service"
+      root.fx.setHyprEnabled(root.fx.parseOnOffToggle(value, root.fx.hyprEnabled))
+      return root.fx.hyprEnabled ? "on" : "off"
+    }
+    function power(value: string): string {
+      return root.fx && root.fx.ipcPower ? root.fx.ipcPower(value) : "no-service"
+    }
+    function active(value: string): string {
+      return root.power(value)
+    }
+    function mode(value: string): string {
+      return root.fx && root.fx.ipcMode ? root.fx.ipcMode(value) : "no-service"
+    }
+    function track(value: string): string {
+      return root.fx && root.fx.ipcTrack ? root.fx.ipcTrack(value) : "no-service"
+    }
+    function exclusive(value: string): string {
+      return root.track(value)
+    }
+    function layer(slot: string, shader: string): string {
+      return root.fx && root.fx.ipcLayer ? root.fx.ipcLayer(slot, shader) : "no-service"
+    }
+    function param(preset: string, key: string, value: string): string {
+      return root.fx && root.fx.ipcParam ? root.fx.ipcParam(preset, key, value) : "no-service"
+    }
+    function reset(): string {
+      return root.fx && root.fx.ipcReset ? root.fx.ipcReset() : "no-service"
+    }
+    function refresh(): string {
+      return root.fx && root.fx.ipcRefresh ? root.fx.ipcRefresh() : "no-service"
     }
   }
 

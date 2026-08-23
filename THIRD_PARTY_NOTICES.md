@@ -24,9 +24,9 @@ YeHaike material.
 
 The current implementation contains substantial modifications and
 original code, including the rendering and lighting model, analytical
-normal-based shading, Qt/OpenGL integration, parameterization,
-randomization/noise, scaling, compositing, and other implementation
-changes.
+normal-based shading, Qt/OpenGL integration, Hyprland screen-shader
+refraction in `HyprShader.js`, parameterization, randomization/noise,
+scaling, compositing, and other implementation changes.
 
 For permission or licensing questions concerning the original YeHaike
 work, contact the original author at the address provided in the original

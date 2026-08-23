@@ -277,7 +277,9 @@ void main() {
     vec2 deriv = rain.yz;
     float trail = rain.w;
 
-    if (h <= 0.0 && trail <= 0.0) {
+    float cover = max(smoothstep(0.0, max(fwidth(h) * 2.35, 0.011), h),
+                      smoothstep(0.0, max(fwidth(trail) * 2.1, 0.035), trail));
+    if (cover < 0.02) {
         fragColor = vec4(0.0);
         return;
     }
@@ -313,6 +315,6 @@ void main() {
     vec3 col = glass * (meniscus * 0.70 + fresnel * 0.22 + spec * 1.35 + specBroad * 0.12) * mix(0.55, 1.15, sheen * 0.5);
     col *= mix(0.70, 1.0, ndotl * 0.55 + 0.45);
 
-    fragColor = vec4(col * alpha, alpha) * qt_Opacity * clamp(strength, 0.0, 1.0);
+    fragColor = vec4(col * alpha, alpha) * cover * qt_Opacity * clamp(strength, 0.0, 1.0);
     fragColor.a += 0.0 * lightning;
 }

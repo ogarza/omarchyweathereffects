@@ -146,7 +146,7 @@ Panel {
       root.focusSection = "modes"
     if ((root.focusSection === "layerA" || root.focusSection === "layerB" || root.focusSection === "layerC") && !root.customMode)
       root.focusSection = "modes"
-    if (root.focusSection === "tweaks" && !root.showTweaks)
+    if ((root.focusSection === "tweaks" || root.focusSection === "reset") && !root.showTweaks)
       root.focusSection = root.customMode ? "layerC" : (root.exclusiveMode ? "track" : "modes")
     if (root.modeIndex < 0) root.modeIndex = 0
     if (root.modeIndex >= root.modeList.length)
@@ -195,8 +195,12 @@ Panel {
         root.fx.setQuality(root.qualityList[nextQ].value)
       return
     }
-    if (dx > 0 && root.showTweaks && root.focusSection !== "tweaks" && root.focusSection !== "quality") {
-      root.focusSection = "tweaks"
+    if (root.focusSection === "hypr" && dx !== 0) {
+      if (root.fx) root.fx.setHyprEnabled(!root.fx.hyprEnabled)
+      return
+    }
+    if (dx > 0 && root.showTweaks && root.focusSection !== "tweaks" && root.focusSection !== "reset" && root.focusSection !== "quality" && root.focusSection !== "hypr") {
+      root.focusSection = "reset"
       return
     }
     if (dy === 0) return
@@ -214,6 +218,16 @@ Panel {
         root.focusSection = "header"
         return
       }
+      root.focusSection = "hypr"
+      return
+    }
+
+    if (root.focusSection === "hypr") {
+      if (dy < 0) {
+        root.focusSection = "quality"
+        root.qualityIndex = root.fx ? Model.indexOfQuality(root.fx.quality) : root.qualityIndex
+        return
+      }
       root.focusSection = "modes"
       root.modeIndex = 0
       return
@@ -222,8 +236,7 @@ Panel {
     if (root.focusSection === "modes") {
       if (dy < 0) {
         if (root.modeIndex <= 0) {
-          root.focusSection = "quality"
-          root.qualityIndex = root.fx ? Model.indexOfQuality(root.fx.quality) : root.qualityIndex
+          root.focusSection = "hypr"
           return
         }
         root.modeIndex = root.modeIndex - 1
@@ -244,11 +257,9 @@ Panel {
         return
       }
       if (root.showTweaks) {
-        root.focusSection = "tweaks"
-        root.tweakIndex = 0
+        root.focusSection = "reset"
         return
       }
-      root.focusSection = "reset"
       return
     }
 
@@ -267,11 +278,9 @@ Panel {
         return
       }
       if (root.showTweaks) {
-        root.focusSection = "tweaks"
-        root.tweakIndex = 0
+        root.focusSection = "reset"
         return
       }
-      root.focusSection = "reset"
       return
     }
 
@@ -328,49 +337,14 @@ Panel {
         return
       }
       if (root.showTweaks) {
-        root.focusSection = "tweaks"
-        root.tweakIndex = 0
+        root.focusSection = "reset"
         return
       }
-      root.focusSection = "reset"
-      return
-    }
-
-    if (root.focusSection === "tweaks") {
-      if (dy < 0) {
-        if (root.tweakIndex <= 0) {
-          if (root.customMode) {
-            root.focusSection = "layerC"
-            root.layerCIndex = root.mixShaderList.length - 1
-            return
-          }
-          if (root.exclusiveMode) {
-            root.focusSection = "track"
-            root.trackIndex = root.exclusiveList.length - 1
-            return
-          }
-          root.focusSection = "modes"
-          root.modeIndex = root.modeList.length - 1
-          return
-        }
-        root.tweakIndex = root.tweakIndex - 1
-        return
-      }
-      if (root.tweakIndex < root.tweakRowCount - 1) {
-        root.tweakIndex = root.tweakIndex + 1
-        return
-      }
-      root.focusSection = "reset"
       return
     }
 
     if (root.focusSection === "reset") {
       if (dy < 0) {
-        if (root.showTweaks) {
-          root.focusSection = "tweaks"
-          root.tweakIndex = root.tweakRowCount - 1
-          return
-        }
         if (root.customMode) {
           root.focusSection = "layerC"
           root.layerCIndex = root.mixShaderList.length - 1
@@ -383,7 +357,26 @@ Panel {
         }
         root.focusSection = "modes"
         root.modeIndex = root.modeList.length - 1
+        return
       }
+      if (root.showTweaks) {
+        root.focusSection = "tweaks"
+        root.tweakIndex = 0
+      }
+      return
+    }
+
+    if (root.focusSection === "tweaks") {
+      if (dy < 0) {
+        if (root.tweakIndex <= 0) {
+          root.focusSection = "reset"
+          return
+        }
+        root.tweakIndex = root.tweakIndex - 1
+        return
+      }
+      if (root.tweakIndex < root.tweakRowCount - 1)
+        root.tweakIndex = root.tweakIndex + 1
     }
   }
 
@@ -396,6 +389,10 @@ Panel {
     if (root.focusSection === "quality") {
       var quality = root.qualityList[root.qualityIndex]
       if (quality) root.fx.setQuality(quality.value)
+      return
+    }
+    if (root.focusSection === "hypr") {
+      root.fx.setHyprEnabled(!root.fx.hyprEnabled)
       return
     }
     if (root.focusSection === "modes") {
@@ -551,6 +548,74 @@ Panel {
             }
           }
 
+          CursorSurface {
+            width: parent.width
+            implicitHeight: hyprSwitch.implicitHeight
+            hasCursor: root.cursorActive && root.focusSection === "hypr"
+            foreground: root.foreground
+            outline: true
+
+            MouseArea {
+              anchors.fill: parent
+              hoverEnabled: true
+              cursorShape: Qt.PointingHandCursor
+              onEntered: {
+                root.cursorActive = true
+                root.focusSection = "hypr"
+              }
+              onClicked: if (root.fx) root.fx.setHyprEnabled(!root.fx.hyprEnabled)
+            }
+
+            Row {
+              width: parent.width
+              spacing: Style.space(12)
+              anchors.verticalCenter: parent.verticalCenter
+              anchors.left: parent.left
+              anchors.leftMargin: Style.space(6)
+
+              ToggleSwitch {
+                id: hyprSwitch
+                checked: root.fx ? root.fx.hyprEnabled === true : true
+                interactive: false
+                hasCursor: root.cursorActive && root.focusSection === "hypr"
+                foreground: root.foreground
+              }
+
+              Column {
+                width: parent.width - hyprSwitch.width - Style.space(12)
+                spacing: Style.space(2)
+
+                Text {
+                  width: parent.width
+                  text: "Desktop warp"
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                }
+
+                Text {
+                  width: parent.width
+                  text: "Hyprland refraction and haze. Off uses the painted overlay only."
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.WordWrap
+                }
+              }
+            }
+          }
+
+          Text {
+            width: parent.width
+            visible: !!(root.fx && root.fx.hyprShaderRivalWarning)
+            text: root.fx ? root.fx.hyprShaderRivalWarning : ""
+            color: root.dim
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.WordWrap
+          }
+
           Row {
             width: parent.width
             spacing: Style.space(16)
@@ -676,15 +741,6 @@ Panel {
               fields: root.layerFieldsC
               indexOffset: root.layerFieldsA.length + root.layerFieldsB.length
             }
-
-            Column {
-              width: Style.space(200)
-              spacing: Style.space(8)
-
-              ResetRow {
-                width: parent.width
-              }
-            }
           }
         }
       }
@@ -753,6 +809,11 @@ Panel {
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
       wrapMode: Text.WordWrap
+    }
+
+    ResetRow {
+      visible: layerTweaks.indexOffset === 0
+      width: parent.width
     }
 
     Repeater {
@@ -1046,14 +1107,24 @@ Panel {
       ? field.min
       : Model.fieldMinimum(tweakCol.paramPreset, tweakCol.paramKey)
     readonly property bool isCheck: !!(field && field.kind === "check")
+    readonly property bool isTemp: !!(field && field.format === "temp")
+    readonly property bool imperial: Model.shouldUseImperial(Qt.locale().name)
     readonly property real paramValue: root.fx
-      ? Model.paramValue(root.fx.params, tweakCol.paramPreset, tweakCol.paramKey, tweakCol.isCheck ? 0 : 1)
-      : (tweakCol.isCheck ? 0 : 1)
+      ? Model.paramValue(root.fx.params, tweakCol.paramPreset, tweakCol.paramKey, tweakCol.isCheck ? 0 : (tweakCol.isTemp ? Model.defaultHazeTempC : 1))
+      : (tweakCol.isCheck ? 0 : (tweakCol.isTemp ? Model.defaultHazeTempC : 1))
+    readonly property real displayMin: tweakCol.isTemp ? (tweakCol.imperial ? 50 : 10) : tweakCol.minimum
+    readonly property real displayMax: tweakCol.isTemp ? (tweakCol.imperial ? 120 : 49) : tweakCol.maximum
+    readonly property real displayValue: tweakCol.isTemp
+      ? (tweakCol.imperial ? Model.celsiusToFahrenheit(tweakCol.paramValue) : tweakCol.paramValue)
+      : tweakCol.paramValue
     readonly property bool rowCursor: root.cursorActive && root.focusSection === "tweaks" && root.tweakIndex === tweakCol.rowIndex
     readonly property bool checked: tweakCol.paramValue >= 0.5
 
     function commit(v, persist) {
-      if (root.fx) root.fx.setParam(tweakCol.paramPreset, tweakCol.paramKey, v, persist)
+      var stored = v
+      if (tweakCol.isTemp && tweakCol.imperial)
+        stored = Model.fahrenheitToCelsius(v)
+      if (root.fx) root.fx.setParam(tweakCol.paramPreset, tweakCol.paramKey, stored, persist)
     }
 
     function focusRow() {
@@ -1066,7 +1137,9 @@ Panel {
       width: parent.width
       text: tweakCol.isCheck
         ? (tweakCol.label + (tweakCol.checked ? "  On" : "  Off"))
-        : (tweakCol.label + "  " + Math.round(tweakCol.paramValue * 100) + "%")
+        : tweakCol.isTemp
+          ? (tweakCol.label + "  " + Math.round(tweakCol.displayValue) + (tweakCol.imperial ? "°F" : "°C"))
+          : (tweakCol.label + "  " + Math.round(tweakCol.paramValue * 100) + "%")
       color: root.dim
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
@@ -1115,10 +1188,10 @@ Panel {
         anchors.fill: parent
         anchors.leftMargin: Style.space(6)
         anchors.rightMargin: Style.space(6)
-        minimum: tweakCol.minimum
-        maximum: tweakCol.maximum
-        step: tweakCol.maximum > 1 ? 0.1 : 0.05
-        value: tweakCol.paramValue
+        minimum: tweakCol.displayMin
+        maximum: tweakCol.displayMax
+        step: tweakCol.isTemp ? 1 : (tweakCol.maximum > 1 ? 0.1 : 0.05)
+        value: tweakCol.displayValue
         onMoved: function(v) { tweakCol.commit(v, false) }
         onReleased: function(v) { tweakCol.commit(v, true) }
       }

@@ -65,6 +65,7 @@ layout(std140, binding = 0) uniform buf {
     float lightning;
     float azimuth;
     float frequency;
+    float sheen;
     float quality;
 };
 
@@ -422,6 +423,8 @@ void main() {
     float h = rain.x;
     vec2 deriv = rain.yz;
     float trail = rain.w;
+    float cover = max(smoothstep(0.0, max(fwidth(h) * 2.35, 0.011), h),
+                      smoothstep(0.0, max(fwidth(trail) * 2.1, 0.035), trail));
 
     float darken = 0.0;
     float brighten = 0.0;
@@ -448,10 +451,12 @@ void main() {
         float trailFilm = smoothstep(0.02, 0.45, trail) * (1.0 - smoothstep(0.15, 0.55, h));
 
         darken = body * mix(0.16, 0.06, ndotl) + trailFilm * 0.055;
-        brighten = meniscus * 0.20 + fresnel * 0.07 + spec * 0.62 + specBroad * 0.05;
+        float sheenAmt = clamp(sheen, 0.0, 2.0);
+        brighten = (meniscus * 0.20 + fresnel * 0.07 + spec * 0.62 + specBroad * 0.05) * sheenAmt;
 
         vec3 glass = vec3(0.70, 0.82, 0.96);
-        col = glass * (meniscus * 0.70 + fresnel * 0.22 + spec * 1.25 + specBroad * 0.12);
+        col = glass * (meniscus * 0.70 + fresnel * 0.22 + spec * 1.25 + specBroad * 0.12)
+            * mix(0.55, 1.15, sheenAmt * 0.5);
         col *= mix(0.62, 1.0, ndotl * 0.55 + 0.45);
     }
 
@@ -487,7 +492,7 @@ void main() {
     vec3 boltCol = vec3(0.90, 0.96, 1.0) * 1.15 + vec3(0.45, 0.55, 1.0) * 0.35;
     vec3 sheetCol = vec3(0.42, 0.52, 0.88);
 
-    float rainAlpha = clamp(darken + brighten + h * 0.025, 0.0, 0.50);
+    float rainAlpha = clamp(darken + brighten + h * 0.025, 0.0, 0.50) * cover;
     float flashAlpha = clamp(boltMask * 0.85, 0.0, 1.0);
     float alpha = clamp(wash + rainAlpha + flashAlpha + sheet, 0.0, 0.78);
 
