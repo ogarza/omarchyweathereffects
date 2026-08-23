@@ -1,7 +1,8 @@
 # Third-Party Notices
 
 This project includes or is derived from third-party work. The following
-notices apply to the rain-on-glass shader, fire shader and related code.
+notices apply to the rain-on-glass shader, storm lightning, fire shader,
+and related code.
 
 ## Raindrops on glass — YeHaike
 
@@ -81,6 +82,33 @@ original author.
 
 For permission to use, modify, or redistribute the original work,
 please contact the original author.
+
+## Lightning Strike — Pavlo Zhukov
+
+**Author:** Pavlo Zhukov  
+**Title:** Lightning Strike  
+**Year:** 2026
+
+The branched lightning in `shaders/stormy.frag` is adapted from this
+work. Hash functions are credited to Dave Hoskins (or Inigo Quilez);
+fBm follows standard value noise.
+
+The original work is licensed under the:
+
+**Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported
+License (CC BY-NC-SA 3.0).**
+
+License:
+https://creativecommons.org/licenses/by-nc-sa/3.0/
+
+The original work is therefore not distributed under this project's MIT
+license. This project does not grant additional rights to the original
+material. ShareAlike terms continue to apply to the adapted lightning
+code.
+
+The current implementation contains modifications for Qt overlay
+compositing, storm timing, and parameterization, and is combined with
+the rain-on-glass overlay in the same shader.
 
 ## Licensing of this repository
 

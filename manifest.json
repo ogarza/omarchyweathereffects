@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "id": "ogarza.weather",
   "name": "Omarchy Weather Effects",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "author": "ogarza",
-  "description": "Fullscreen post-processing overlays with weather-aware presets",
+  "description": "Fullscreen weather overlays with quality scaling, mixes, follow-mode fades, and live Open-Meteo",
   "kinds": ["service", "bar-widget"],
   "entryPoints": {
     "service": "Service.qml",
@@ -12,7 +12,7 @@
   },
   "barWidget": {
     "displayName": "Omarchy Weather Effects",
-    "description": "Fullscreen weather overlays: rain, snow, fog, sun, storm, fire, follow, or exclusive",
+    "description": "Fullscreen weather overlays: singles, mixes, follow, or exclusive",
     "category": "Desktop",
     "allowMultiple": false,
     "defaultSection": "right"

@@ -22,6 +22,8 @@ layout(std140, binding = 0) uniform buf {
     float night;
     float azimuth;
     float sunDistance;
+    float frequency;
+    float quality;
 };
 
 float hash11(float n) {
@@ -49,24 +51,41 @@ void main() {
 
     float glowAmt = clamp(glow, 0.0, 2.0);
     float n = clamp(night, 0.0, 1.0);
-    float t = time * max(speed, 0.0);
+    float t = time * 3.5 * max(speed, 0.0);
 
-    float dayWash = exp(-distScreen * 1.1) * 0.28 + exp(-distScreen * 2.6) * 0.12;
-    float nightWash = exp(-distScreen * 0.85) * 0.22 + exp(-distScreen * 1.8) * 0.10;
+    float dayWash = exp(-distScreen * 1.1) * 0.28;
+    float nightWash = exp(-distScreen * 0.85) * 0.22;
+    if (quality > 0.5) {
+        dayWash += exp(-distScreen * 2.6) * 0.12;
+        nightWash += exp(-distScreen * 1.8) * 0.10;
+    }
+    if (quality > 2.5) {
+        dayWash += exp(-distScreen * 5.2) * 0.07;
+        nightWash += exp(-distScreen * 3.6) * 0.06;
+    }
     float sunGlow = mix(dayWash, nightWash, n) * glowAmt;
 
     float nRays = mix(2.4, 12.0, dAmt * 0.5);
     float sharp = mix(2.2, 26.0, dAmt * 0.5);
     float shafts = pow(max(sin(angle * nRays + t * 0.05) * 0.5 + 0.5, 0.0), sharp);
-    float shafts2 = pow(max(sin(angle * (nRays * 0.78) + 0.7 - t * 0.03) * 0.5 + 0.5, 0.0), sharp + 4.0);
+    float shafts2 = 0.0;
+    float shafts3 = 0.0;
+    if (quality > 0.5)
+        shafts2 = pow(max(sin(angle * (nRays * 0.78) + 0.7 - t * 0.03) * 0.5 + 0.5, 0.0), sharp + 4.0);
+    if (quality > 2.5)
+        shafts3 = pow(max(sin(angle * (nRays * 1.31) + 1.4 + t * 0.04) * 0.5 + 0.5, 0.0), sharp + 8.0);
     float rayFade = mix(0.35, 1.0, exp(-distScreen * mix(0.08, 0.55, dAmt * 0.5)));
     float rayAmt = mix(1.0, 0.40, n);
     float cone = pow(zRef / max(dist, 0.001), mix(0.15, 1.8, dAmt * 0.5));
     shafts = shafts * mix(0.34, 0.10, dAmt * 0.5) * glowAmt * rayFade * rayAmt * cone;
     shafts2 = shafts2 * mix(0.18, 0.05, dAmt * 0.5) * glowAmt * rayFade * rayAmt * cone;
+    shafts3 = shafts3 * mix(0.10, 0.03, dAmt * 0.5) * glowAmt * rayFade * rayAmt * cone;
 
     float motes = 0.0;
-    for (int i = 0; i < 18; i++) {
+    int moteCount = quality < 0.5 ? 4 : quality < 1.5 ? 8 : quality < 2.5 ? 18 : 24;
+    for (int i = 0; i < 24; i++) {
+        if (i >= moteCount)
+            break;
         float fi = float(i);
         float sx = hash11(fi + 1.7);
         float sy = hash11(fi + 8.3);
@@ -81,7 +100,7 @@ void main() {
         spark *= 0.35 + 0.65 * (0.5 + 0.5 * sin(t * (1.3 + sx * 2.0) + fi));
         motes += spark;
     }
-    motes *= glowAmt * mix(1.0, 0.55, n);
+    motes *= glowAmt * mix(1.0, 0.55, n) * clamp(density, 0.0, 2.0);
 
     vec3 gold = vec3(1.0, 0.86, 0.55);
     vec3 warm = vec3(1.0, 0.93, 0.78);
@@ -89,9 +108,9 @@ void main() {
     vec3 silver = vec3(0.82, 0.88, 1.0);
     float heat = clamp(sunGlow * 1.4, 0.0, 1.0);
     vec3 col = mix(mix(gold, warm, heat), mix(steel, silver, heat), n);
-    float alpha = sunGlow * mix(0.22, 0.18, n) + shafts + shafts2 + motes * mix(0.16, 0.10, n);
+    float alpha = sunGlow * mix(0.22, 0.18, n) + shafts + shafts2 + shafts3 + motes * mix(0.16, 0.10, n);
     alpha = clamp(alpha, 0.0, mix(0.72, 0.22, dAmt * 0.5) * mix(1.0, 0.72, n));
 
     fragColor = vec4(col * alpha, alpha) * qt_Opacity * clamp(strength, 0.0, 1.0);
-    fragColor.a += 0.0 * (density + lightning + scale + azimuth + sunDistance);
+    fragColor.a += 0.0 * (lightning + scale + azimuth + sunDistance);
 }

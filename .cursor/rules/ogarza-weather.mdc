@@ -1,0 +1,17 @@
+---
+description: ogarza.weather plugin conventions
+alwaysApply: true
+---
+
+# ogarza.weather
+
+Read `AGENTS.md` before non-trivial edits. Keep replies and diffs small.
+
+- Persist via `loadPersisted` / `persistSettings` only (including `quality`). Never write `/usr/share/omarchy/`.
+- Mode `none` is default. Follow/Exclusive never select `fire`, `rainbow`, or `custom`.
+- Follow: `locationReady` then Open-Meteo (coords) or wttr. WMO `0` is sunny (`parseWeatherCode`, not `code || ""`).
+- Compositor: fade `overlayFromPreset` → `overlayToPreset`. Follow 10s, panel 2s. Mixes = two or three slots. Quality downscales the layer stack except Extreme.
+- Shaders: premultiplied `vec4(rgb * a, a) * qt_Opacity * strength`. Keep the std140 uniform block in sync. Stormy: no arrays / baked bolt tables (blank overlay); see `shaders.mdc`.
+- Panel params: columns from `fieldsForVisualLayer` / `fieldsForPanel`. Follow → live `weatherPreset`; Exclusive → `exclusivePreset`. Mixes and singles expand one column per layer (optional rainbow last). Custom: stacked A/B/C pickers (`none` is off).
+- New weather types: `Model.js` modes + maps + params; `Service.qml` only if compositor/fetch changes.
+- Docs: README + CHANGELOG + manifest version when behavior changes.

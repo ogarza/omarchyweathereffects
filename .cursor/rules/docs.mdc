@@ -1,0 +1,18 @@
+---
+description: Keep plugin docs in sync with behavior changes
+alwaysApply: true
+---
+
+# Documentation
+
+User-facing or agent-facing behavior changes must update docs in the same change.
+
+| Change | Update |
+|--------|--------|
+| Modes, mixes, Follow maps, panel, IPC, params | `README.md` |
+| Any of the above | `CHANGELOG.md` (new version heading) + `manifest.json` `version` |
+| File roles, compositor, persist, shader uniforms | `AGENTS.md` |
+| How to edit the plugin | `.cursor/skills/ogarza-weather/SKILL.md` |
+| Conventions | `.cursor/rules/*.mdc` |
+
+Do not leave README describing old slider layout or stale param names. Panel fields live in `Model.js` `tweakFields` / `fieldsForPanel` — document new keys there and in README Tweaks.

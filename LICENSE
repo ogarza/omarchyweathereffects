@@ -2,6 +2,11 @@ MIT License
 
 Copyright (c) 2026 ogarza
 
+This license covers original work in this repository. Rain, storm
+lightning, and fire shaders include third-party material under other
+terms (including CC BY-NC-SA 3.0). See THIRD_PARTY_NOTICES.md. Those
+terms are not replaced by this MIT grant.
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights

@@ -41,6 +41,8 @@ layout(std140, binding = 0) uniform buf {
     float scale;
     float glow;
     float lightning;
+    float frequency;
+    float quality;
 };
 
 vec3 rgb2hsv(vec3 c) {
@@ -73,7 +75,10 @@ float noise(vec2 n) {
 float fbm(vec2 n) {
     float total = 0.0;
     float amplitude = 1.0;
-    for (int i = 0; i < 5; i++) {
+    int octaves = quality < 0.5 ? 2 : quality < 1.5 ? 3 : quality < 2.5 ? 5 : 6;
+    for (int i = 0; i < 6; i++) {
+        if (i >= octaves)
+            break;
         total += noise(n) * amplitude;
         n += n * 1.7;
         amplitude *= 0.47;
@@ -105,11 +110,16 @@ void main() {
     vec2 p = frag.xy * dist / max(resolution.x, 1.0);
     p.x -= t / 1.1;
     float q = fbm(p - t * 0.01 + 1.0 * sin(t) / 10.0);
-    float qb = fbm(p - t * 0.002 + 0.1 * cos(t) / 5.0);
-    float q2 = fbm(p - t * 0.44 - 5.0 * cos(t) / 7.0) - 6.0;
-    float q3 = fbm(p - t * 0.9 - 10.0 * cos(t) / 30.0) - 4.0;
-    float q4 = fbm(p - t * 2.0 - 20.0 * sin(t) / 20.0) + 2.0;
-    q = (q + qb - 0.4 * q2 - 2.0 * q3 + 0.6 * q4) / 3.8;
+    float qb = quality < 0.5 ? q : fbm(p - t * 0.002 + 0.1 * cos(t) / 5.0);
+    float q2 = quality < 1.5 ? 0.0 : fbm(p - t * 0.44 - 5.0 * cos(t) / 7.0) - 6.0;
+    float q3 = quality < 1.5 ? 0.0 : fbm(p - t * 0.9 - 10.0 * cos(t) / 30.0) - 4.0;
+    float q4 = quality < 1.5 ? 0.0 : fbm(p - t * 2.0 - 20.0 * sin(t) / 20.0) + 2.0;
+    if (quality < 0.5)
+        q = (q + qb) * 0.5;
+    else if (quality < 1.5)
+        q = (q + qb - 0.4 * q2) / 2.4;
+    else
+        q = (q + qb - 0.4 * q2 - 2.0 * q3 + 0.6 * q4) / 3.8;
     vec2 r = vec2(
         fbm(p + q / 2.0 + t * fireSpeed.x - p.x - p.y),
         fbm(p + q - t * fireSpeed.y)

@@ -1,0 +1,41 @@
+# Changelog
+
+## 1.5.0
+
+- **None** mode (default). Overlay stays off until a real effect is chosen; missing/unknown mode no longer becomes rain.
+- Crossfade compositor: two or three shader slots (up to six fullscreen passes during a fade). Follow fades in 10s; panel / Exclusive / overlay toggle in 2s. Mid-fade retargets or reverses instead of stacking.
+- Mix conditions (per-layer strength): partly cloudy, overcast, sun shower, moonlit clouds, drizzle, snow squall, wintry mix.
+- Follow maps WMO / wttr codes onto singles and mixes. Fire, rainbow, and custom are never chosen. Partly cloudy becomes moonlit clouds after sunset. Thunder is Stormy. Clear (WMO `0`) is sunny.
+- Follow waits for `weather.json` coords before fetching; prefers Open-Meteo; falls back to wttr. No stale rain from a premature wttr call.
+- Faster fog and sunny motion baselines. Fog is clouds only (no extra top mist).
+- **Rainbow** mode (manual only): primary and secondary bows opposite the sun, with a faint inner fringe. The bow fades after sunset.
+- **Add Rainbow** is available on every condition except standalone Rainbow (Custom uses Layer C instead). Off by default.
+- **Custom** mode (manual only): stacked Layer A / B / C pickers. Each layer can be **None**. Parameters for enabled layers expand to the right.
+- Panel groups Fire, Rainbow, and Custom under **Manual only**, below a separator after Follow / Exclusive.
+- Other conditions use the same expanding columns: one per mix layer, plus Rainbow when **Add Rainbow** is on. Exclusive **Track only** sits immediately to the right of the mode list, then those columns. Follow / Exclusive show parameters for the live or tracked condition.
+- Exclusive notes that the overlay waits for matching local weather; the panel previews the tracked effect until you close it.
+- **Quality** selector (Low / Medium / High / Extreme): render the overlay at 33% / 50% / 75% / 100% of native pixels and scale up. Default is High. Extreme skips the offscreen blit and adds extra shader work (FBM octaves, snow layers, sun motes/glow terms, rain layers and specular, storm bolt segments, rainbow fringe). High matches the original look.
+- Quality persists with the plugin entry. IPC: `omarchy-shell ogarza.weather preview <preset>`, `overlay`, and `quality <level>`.
+- Wired previously unused uniforms: fog size, rain sheen, snow brightness, sunny dust, storm gloom.
+- Rain and stormy drop Scale caps at 100% so drops stay inside their cells.
+- Sunny/moonlight Speed at 100% matches the previous 50% (half the motion baseline). Position defaults to 120%.
+- Default sliders match the tuned look (rain sheen 50%, snow dimmer/smaller, storm Density 100% and Speed 115%, slower fire, mix layer balances, and so on).
+- Stormy: **Flash** and **Frequency** sliders (100% Frequency is half the previous strike rate), Gloom defaults to 100%, a cool sheet flash with the bolt, a lingering ease-out, and a rare double blink. Angle slider for drop lean (100% is the original diagonal). Lightning flash envelope is adapted from Pavlo Zhukov (CC BY-NC-SA 3.0).
+- Rainbow sliders: Glow, Vividness, Size (max 400%), Horizontal (default 80%), Height (−200% to 200%, default 65%), Distance, Shimmer (default 100%).
+
+## 1.4.1
+
+- Fire shader compiles again (comment header was missing a slash).
+
+## 1.4.0
+
+- Exclusive mode: track one weather type; overlay only when it matches; preview while the panel is open.
+- Sunny/Moonlight Position and Distance sliders.
+- Higher Density cap for rain and stormy (240%).
+- Reset to defaults in the panel.
+- Sparkles bar icon (not a weather glyph).
+- Compiled `.qsb` shaders are gitignored and rebuilt from `.frag` on load.
+
+## 1.3.0
+
+- Sunny/Moonlight switch from sun position at the configured location.

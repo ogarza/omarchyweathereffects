@@ -18,21 +18,60 @@ Panel {
     ? bar.shell.serviceFor("ogarza.weather") : null
 
   readonly property var modeList: Model.modes
+  readonly property var liveModeList: Model.modesForPanel(false)
+  readonly property var manualModeList: Model.modesForPanel(true)
   readonly property var exclusiveList: Model.exclusivePresets
+  readonly property var mixShaderList: Model.customLayerEntries()
+  readonly property var qualityList: Model.qualityLevels
   readonly property bool exclusiveMode: !!(fx && fx.mode === "exclusive")
+  readonly property bool customMode: !!(fx && fx.mode === "custom")
   readonly property string tweakPreset: {
-    if (!fx) return "rain"
+    if (!fx) return ""
+    if (fx.mode === "follow") return fx.weatherPreset || ""
     if (fx.mode === "exclusive") return fx.exclusivePreset
     return fx.mode
   }
-  readonly property bool showTweaks: !!(fx && Model.hasTweaks(tweakPreset))
-  readonly property var advancedFields: fx ? Model.fieldsForMode(tweakPreset) : []
-  readonly property int tweakRowCount: showTweaks ? (1 + advancedFields.length) : 0
+  readonly property var tweakFields: fx ? Model.fieldsForPanel(tweakPreset, fx.customShaderA, fx.customShaderB, fx.customShaderC, fx.params) : []
+  readonly property var layerFieldsA: fx ? Model.fieldsForVisualLayer(tweakPreset, 0, fx.customShaderA, fx.customShaderB, fx.customShaderC, fx.params) : []
+  readonly property var layerFieldsB: fx ? Model.fieldsForVisualLayer(tweakPreset, 1, fx.customShaderA, fx.customShaderB, fx.customShaderC, fx.params) : []
+  readonly property var layerFieldsC: fx ? Model.fieldsForVisualLayer(tweakPreset, 2, fx.customShaderA, fx.customShaderB, fx.customShaderC, fx.params) : []
+  readonly property int paramCols: (root.layerFieldsA.length > 0 ? 1 : 0)
+    + (root.layerFieldsB.length > 0 ? 1 : 0)
+    + (root.layerFieldsC.length > 0 ? 1 : 0)
+  readonly property string layerHeadingA: Model.layerHeading(tweakPreset, 0, fx ? fx.customShaderA : "", fx ? fx.customShaderB : "", fx ? fx.customShaderC : "")
+  readonly property string layerHeadingB: Model.layerHeading(tweakPreset, 1, fx ? fx.customShaderA : "", fx ? fx.customShaderB : "", fx ? fx.customShaderC : "")
+  readonly property string layerHeadingC: Model.layerHeading(tweakPreset, 2, fx ? fx.customShaderA : "", fx ? fx.customShaderB : "", fx ? fx.customShaderC : "")
+  readonly property bool showTweaks: root.tweakFields.length > 0
+  readonly property int tweakRowCount: root.tweakFields.length
+  readonly property string tweakHeading: {
+    if (!root.showTweaks) return "Parameters"
+    var night = fx ? fx.nightFactor : 0
+    return Model.labelForPreset(root.tweakPreset, night)
+  }
+  readonly property string tweakBlurb: {
+    var night = fx ? fx.nightFactor : 0
+    var note = ""
+    if (fx && fx.mode === "exclusive")
+      note = "The overlay stays on only when local weather matches this type. This panel previews it until you close."
+    var desc = ""
+    if (fx && fx.mode === "follow" && !root.tweakPreset)
+      desc = "Waiting for the current forecast."
+    else if (!root.tweakPreset)
+      desc = Model.descriptionForPreset(fx ? fx.mode : "none", night)
+    else
+      desc = Model.descriptionForPreset(root.tweakPreset, night)
+    if (note && desc) return note + "\n\n" + desc
+    return note || desc
+  }
 
   property string focusSection: "modes"
   property int modeIndex: 0
   property int trackIndex: 0
+  property int layerAIndex: 0
+  property int layerBIndex: 0
+  property int layerCIndex: 0
   property int tweakIndex: 0
+  property int qualityIndex: 2
   property bool cursorActive: false
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
@@ -81,32 +120,63 @@ Panel {
         break
       }
     }
+    for (var a = 0; a < root.mixShaderList.length; a++) {
+      if (root.mixShaderList[a].value === root.fx.customShaderA) {
+        root.layerAIndex = a
+        break
+      }
+    }
+    for (var b = 0; b < root.mixShaderList.length; b++) {
+      if (root.mixShaderList[b].value === root.fx.customShaderB) {
+        root.layerBIndex = b
+        break
+      }
+    }
+    for (var c = 0; c < root.mixShaderList.length; c++) {
+      if (root.mixShaderList[c].value === root.fx.customShaderC) {
+        root.layerCIndex = c
+        break
+      }
+    }
+    root.qualityIndex = Model.indexOfQuality(root.fx.quality)
   }
 
   function clampCursor() {
     if (root.focusSection === "track" && !root.exclusiveMode)
       root.focusSection = "modes"
+    if ((root.focusSection === "layerA" || root.focusSection === "layerB" || root.focusSection === "layerC") && !root.customMode)
+      root.focusSection = "modes"
     if (root.focusSection === "tweaks" && !root.showTweaks)
-      root.focusSection = root.exclusiveMode ? "track" : "modes"
+      root.focusSection = root.customMode ? "layerC" : (root.exclusiveMode ? "track" : "modes")
     if (root.modeIndex < 0) root.modeIndex = 0
     if (root.modeIndex >= root.modeList.length)
       root.modeIndex = Math.max(0, root.modeList.length - 1)
     if (root.trackIndex < 0) root.trackIndex = 0
     if (root.trackIndex >= root.exclusiveList.length)
       root.trackIndex = Math.max(0, root.exclusiveList.length - 1)
+    if (root.layerAIndex < 0) root.layerAIndex = 0
+    if (root.layerAIndex >= root.mixShaderList.length)
+      root.layerAIndex = Math.max(0, root.mixShaderList.length - 1)
+    if (root.layerBIndex < 0) root.layerBIndex = 0
+    if (root.layerBIndex >= root.mixShaderList.length)
+      root.layerBIndex = Math.max(0, root.mixShaderList.length - 1)
+    if (root.layerCIndex < 0) root.layerCIndex = 0
+    if (root.layerCIndex >= root.mixShaderList.length)
+      root.layerCIndex = Math.max(0, root.mixShaderList.length - 1)
     if (root.tweakIndex < 0) root.tweakIndex = 0
     if (root.tweakIndex >= root.tweakRowCount)
       root.tweakIndex = Math.max(0, root.tweakRowCount - 1)
+    if (root.qualityIndex < 0) root.qualityIndex = 0
+    if (root.qualityIndex >= root.qualityList.length)
+      root.qualityIndex = Math.max(0, root.qualityList.length - 1)
   }
 
   function adjustTweak(dir) {
     if (!root.fx || !root.showTweaks) return
-    if (root.tweakIndex === 0) {
-      root.fx.nudgeParam(root.tweakPreset, "strength", dir)
-      return
-    }
-    var field = root.advancedFields[root.tweakIndex - 1]
-    if (field) root.fx.nudgeParam(root.tweakPreset, field.key, dir)
+    var field = root.tweakFields[root.tweakIndex]
+    if (!field) return
+    var preset = field.preset || root.tweakPreset
+    root.fx.nudgeParam(preset, field.key, dir, Model.fieldNudgeStep(field))
   }
 
   function moveCursor(dx, dy) {
@@ -116,17 +186,44 @@ Panel {
       root.adjustTweak(dx)
       return
     }
+    if (root.focusSection === "quality" && dx !== 0) {
+      var nextQ = root.qualityIndex + dx
+      if (nextQ < 0) nextQ = 0
+      if (nextQ >= root.qualityList.length) nextQ = root.qualityList.length - 1
+      root.qualityIndex = nextQ
+      if (root.fx && root.qualityList[nextQ])
+        root.fx.setQuality(root.qualityList[nextQ].value)
+      return
+    }
+    if (dx > 0 && root.showTweaks && root.focusSection !== "tweaks" && root.focusSection !== "quality") {
+      root.focusSection = "tweaks"
+      return
+    }
     if (dy === 0) return
 
     if (root.focusSection === "header") {
-      if (dy > 0) root.focusSection = "modes"
+      if (dy > 0) {
+        root.focusSection = "quality"
+        root.qualityIndex = root.fx ? Model.indexOfQuality(root.fx.quality) : root.qualityIndex
+      }
+      return
+    }
+
+    if (root.focusSection === "quality") {
+      if (dy < 0) {
+        root.focusSection = "header"
+        return
+      }
+      root.focusSection = "modes"
+      root.modeIndex = 0
       return
     }
 
     if (root.focusSection === "modes") {
       if (dy < 0) {
         if (root.modeIndex <= 0) {
-          root.focusSection = "header"
+          root.focusSection = "quality"
+          root.qualityIndex = root.fx ? Model.indexOfQuality(root.fx.quality) : root.qualityIndex
           return
         }
         root.modeIndex = root.modeIndex - 1
@@ -134,6 +231,11 @@ Panel {
       }
       if (root.modeIndex < root.modeList.length - 1) {
         root.modeIndex = root.modeIndex + 1
+        return
+      }
+      if (root.customMode) {
+        root.focusSection = "layerA"
+        root.layerAIndex = 0
         return
       }
       if (root.exclusiveMode) {
@@ -173,9 +275,75 @@ Panel {
       return
     }
 
+    if (root.focusSection === "layerA") {
+      if (dy < 0) {
+        if (root.layerAIndex <= 0) {
+          root.focusSection = "modes"
+          root.modeIndex = root.modeList.length - 1
+          return
+        }
+        root.layerAIndex = root.layerAIndex - 1
+        return
+      }
+      if (root.layerAIndex < root.mixShaderList.length - 1) {
+        root.layerAIndex = root.layerAIndex + 1
+        return
+      }
+      root.focusSection = "layerB"
+      root.layerBIndex = 0
+      return
+    }
+
+    if (root.focusSection === "layerB") {
+      if (dy < 0) {
+        if (root.layerBIndex <= 0) {
+          root.focusSection = "layerA"
+          root.layerAIndex = root.mixShaderList.length - 1
+          return
+        }
+        root.layerBIndex = root.layerBIndex - 1
+        return
+      }
+      if (root.layerBIndex < root.mixShaderList.length - 1) {
+        root.layerBIndex = root.layerBIndex + 1
+        return
+      }
+      root.focusSection = "layerC"
+      root.layerCIndex = 0
+      return
+    }
+
+    if (root.focusSection === "layerC") {
+      if (dy < 0) {
+        if (root.layerCIndex <= 0) {
+          root.focusSection = "layerB"
+          root.layerBIndex = root.mixShaderList.length - 1
+          return
+        }
+        root.layerCIndex = root.layerCIndex - 1
+        return
+      }
+      if (root.layerCIndex < root.mixShaderList.length - 1) {
+        root.layerCIndex = root.layerCIndex + 1
+        return
+      }
+      if (root.showTweaks) {
+        root.focusSection = "tweaks"
+        root.tweakIndex = 0
+        return
+      }
+      root.focusSection = "reset"
+      return
+    }
+
     if (root.focusSection === "tweaks") {
       if (dy < 0) {
         if (root.tweakIndex <= 0) {
+          if (root.customMode) {
+            root.focusSection = "layerC"
+            root.layerCIndex = root.mixShaderList.length - 1
+            return
+          }
           if (root.exclusiveMode) {
             root.focusSection = "track"
             root.trackIndex = root.exclusiveList.length - 1
@@ -203,6 +371,11 @@ Panel {
           root.tweakIndex = root.tweakRowCount - 1
           return
         }
+        if (root.customMode) {
+          root.focusSection = "layerC"
+          root.layerCIndex = root.mixShaderList.length - 1
+          return
+        }
         if (root.exclusiveMode) {
           root.focusSection = "track"
           root.trackIndex = root.exclusiveList.length - 1
@@ -220,6 +393,11 @@ Panel {
       root.fx.toggle()
       return
     }
+    if (root.focusSection === "quality") {
+      var quality = root.qualityList[root.qualityIndex]
+      if (quality) root.fx.setQuality(quality.value)
+      return
+    }
     if (root.focusSection === "modes") {
       var entry = root.modeList[root.modeIndex]
       if (entry) root.fx.setMode(entry.value)
@@ -230,12 +408,37 @@ Panel {
       if (track) root.fx.setExclusivePreset(track.value)
       return
     }
+    if (root.focusSection === "layerA") {
+      var layerA = root.mixShaderList[root.layerAIndex]
+      if (layerA) root.fx.setCustomShader(0, layerA.value)
+      return
+    }
+    if (root.focusSection === "layerB") {
+      var layerB = root.mixShaderList[root.layerBIndex]
+      if (layerB) root.fx.setCustomShader(1, layerB.value)
+      return
+    }
+    if (root.focusSection === "layerC") {
+      var layerC = root.mixShaderList[root.layerCIndex]
+      if (layerC) root.fx.setCustomShader(2, layerC.value)
+      return
+    }
+    if (root.focusSection === "tweaks") {
+      var tweak = root.tweakFields[root.tweakIndex]
+      if (tweak && tweak.kind === "check") {
+        var on = Model.paramValue(root.fx.params, tweak.preset || root.tweakPreset, tweak.key, 0) >= 0.5
+        root.fx.setParam(tweak.preset || root.tweakPreset, tweak.key, on ? 0 : 1, true)
+      }
+      return
+    }
     if (root.focusSection === "reset")
       root.fx.resetParams()
   }
 
   onShowTweaksChanged: root.clampCursor()
   onExclusiveModeChanged: root.clampCursor()
+  onCustomModeChanged: root.clampCursor()
+  onParamColsChanged: root.clampCursor()
 
   KeyboardPanel {
     id: panel
@@ -244,7 +447,9 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(320))
+    contentWidth: panel.fittedContentWidth(root.paramCols > 0 || root.customMode || root.exclusiveMode
+      ? Style.space(((root.customMode || root.exclusiveMode) ? 680 : 520) + 220 * Math.max(1, root.paramCols))
+      : Style.space(560))
     contentHeight: panel.fittedContentHeight(column.implicitHeight)
 
     PanelKeyCatcher {
@@ -319,96 +524,284 @@ Panel {
             width: parent.width
             spacing: Style.space(6)
 
-            Repeater {
-              model: root.modeList
-
-              ModeRow {
-                required property var modelData
-                required property int index
-                width: parent.width
-                entry: modelData
-                rowIndex: index
-              }
-            }
-          }
-
-          Column {
-            visible: root.exclusiveMode
-            width: parent.width
-            spacing: Style.space(6)
-
-            PanelSeparator {
-              foreground: root.foreground
-            }
-
             Text {
               width: parent.width
-              text: "Track only"
+              text: "Quality"
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
               font.bold: true
             }
 
-            Repeater {
-              model: root.exclusiveList
+            Row {
+              width: parent.width
+              spacing: Style.space(8)
 
-              TrackRow {
-                required property var modelData
-                required property int index
-                width: parent.width
-                entry: modelData
-                rowIndex: index
+              Repeater {
+                model: root.qualityList
+
+                QualityChip {
+                  required property var modelData
+                  required property int index
+                  width: (parent.width - Style.space(8) * 3) / 4
+                  entry: modelData
+                  rowIndex: index
+                }
               }
             }
           }
 
-          Column {
-            visible: root.showTweaks
+          Row {
             width: parent.width
-            spacing: Style.space(8)
+            spacing: Style.space(16)
 
-            PanelSeparator {
-              foreground: root.foreground
-            }
+            Column {
+              width: (root.customMode || root.exclusiveMode)
+                ? parent.width * 0.22 - Style.space(8)
+                : (root.paramCols > 0 ? parent.width * 0.28 - Style.space(8) : parent.width * 0.58 - Style.space(16))
+              spacing: Style.space(6)
 
-            TweakSlider {
-              width: parent.width
-              label: "Strength"
-              paramKey: "strength"
-              maximum: 1
-              rowIndex: 0
-            }
+              Repeater {
+                model: root.liveModeList
 
-            Repeater {
-              model: root.advancedFields
+                ModeRow {
+                  required property var modelData
+                  required property int index
+                  width: parent.width
+                  entry: modelData
+                  rowIndex: Model.indexOfMode(modelData.value)
+                }
+              }
 
-              TweakSlider {
-                required property var modelData
-                required property int index
+              Column {
                 width: parent.width
-                label: String(modelData.label)
-                paramKey: String(modelData.key)
-                maximum: Model.fieldMaximum(root.tweakPreset, String(modelData.key))
-                rowIndex: index + 1
+                spacing: Style.space(6)
+
+                PanelSeparator {
+                  foreground: root.foreground
+                }
+
+                Text {
+                  width: parent.width
+                  text: "Manual only"
+                  color: root.dim
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.caption
+                  font.bold: true
+                }
+
+                Repeater {
+                  model: root.manualModeList
+
+                  ModeRow {
+                    required property var modelData
+                    required property int index
+                    width: parent.width
+                    entry: modelData
+                    rowIndex: Model.indexOfMode(modelData.value)
+                  }
+                }
+              }
+
+            }
+
+            Column {
+              visible: root.exclusiveMode
+              width: visible ? parent.width * 0.22 - Style.space(8) : 0
+              height: visible ? implicitHeight : 0
+              spacing: Style.space(6)
+
+              Text {
+                width: parent.width
+                text: "Track only"
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.caption
+                font.bold: true
+              }
+
+              Repeater {
+                model: root.exclusiveList
+
+                TrackRow {
+                  required property var modelData
+                  required property int index
+                  width: parent.width
+                  entry: modelData
+                  rowIndex: index
+                }
               }
             }
-          }
 
-          Column {
-            width: parent.width
-            spacing: Style.space(8)
+            Column {
+              visible: root.customMode
+              width: visible ? parent.width * 0.22 - Style.space(8) : 0
+              height: visible ? implicitHeight : 0
+              spacing: Style.space(8)
 
-            PanelSeparator {
-              foreground: root.foreground
+              LayerPickStack {
+                heading: "A"
+                section: "layerA"
+                slot: 0
+              }
+
+              LayerPickStack {
+                heading: "B"
+                section: "layerB"
+                slot: 1
+              }
+
+              LayerPickStack {
+                heading: "C"
+                section: "layerC"
+                slot: 2
+              }
             }
 
-            ResetRow {
-              width: parent.width
+            LayerTweaks {
+              heading: root.layerHeadingA
+              fields: root.layerFieldsA
+              indexOffset: 0
+              showBlurb: !root.customMode
+            }
+
+            LayerTweaks {
+              heading: root.layerHeadingB
+              fields: root.layerFieldsB
+              indexOffset: root.layerFieldsA.length
+            }
+
+            LayerTweaks {
+              heading: root.layerHeadingC
+              fields: root.layerFieldsC
+              indexOffset: root.layerFieldsA.length + root.layerFieldsB.length
+            }
+
+            Column {
+              width: Style.space(200)
+              spacing: Style.space(8)
+
+              ResetRow {
+                width: parent.width
+              }
             }
           }
         }
       }
+    }
+  }
+
+  component LayerPickStack: Column {
+    id: pickStack
+    property string heading: "A"
+    property string section: "layerA"
+    property int slot: 0
+    width: parent.width
+    spacing: Style.space(4)
+
+    Text {
+      width: parent.width
+      text: pickStack.heading
+      color: root.dim
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      font.bold: true
+    }
+
+    Repeater {
+      model: root.mixShaderList
+
+      MixPickRow {
+        required property var modelData
+        required property int index
+        width: pickStack.width
+        entry: modelData
+        rowIndex: index
+        section: pickStack.section
+        slot: pickStack.slot
+      }
+    }
+  }
+
+  component LayerTweaks: Column {
+    id: layerTweaks
+    property string heading: ""
+    property var fields: []
+    property int indexOffset: 0
+    property bool showBlurb: false
+    visible: layerTweaks.fields && layerTweaks.fields.length > 0
+    width: visible
+      ? (parent.width * ((root.customMode || root.exclusiveMode) ? 0.48 : 0.62) - Style.space(16)) / Math.max(1, root.paramCols)
+      : 0
+    height: visible ? implicitHeight : 0
+    spacing: Style.space(8)
+
+    Text {
+      width: parent.width
+      text: layerTweaks.heading
+      color: root.dim
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      font.bold: true
+    }
+
+    Text {
+      width: parent.width
+      visible: layerTweaks.showBlurb && root.tweakBlurb !== ""
+      text: root.tweakBlurb
+      color: root.dim
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      wrapMode: Text.WordWrap
+    }
+
+    Repeater {
+      model: layerTweaks.fields
+
+      TweakField {
+        required property var modelData
+        required property int index
+        width: layerTweaks.width
+        field: modelData
+        rowIndex: layerTweaks.indexOffset + index
+      }
+    }
+  }
+
+  component QualityChip: CursorSurface {
+    id: qualityChip
+    property var entry: null
+    property int rowIndex: 0
+    readonly property string value: entry ? String(entry.value) : ""
+    readonly property string label: entry ? String(entry.label) : ""
+    readonly property bool selected: root.fx && root.fx.quality === qualityChip.value
+
+    hasCursor: root.cursorActive && root.focusSection === "quality" && root.qualityIndex === rowIndex
+    current: selected
+    foreground: root.foreground
+
+    implicitHeight: qualityLabel.implicitHeight + Style.space(10)
+
+    MouseArea {
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onEntered: {
+        root.cursorActive = true
+        root.focusSection = "quality"
+        root.qualityIndex = qualityChip.rowIndex
+      }
+      onClicked: if (root.fx) root.fx.setQuality(qualityChip.value)
+    }
+
+    Text {
+      id: qualityLabel
+      anchors.centerIn: parent
+      text: qualityChip.label
+      color: root.foreground
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.body
+      font.bold: qualityChip.selected
     }
   }
 
@@ -524,6 +917,74 @@ Panel {
     }
   }
 
+  component MixPickRow: CursorSurface {
+    id: mixRow
+    property var entry: null
+    property int rowIndex: 0
+    property string section: "layerA"
+    property int slot: 0
+    readonly property string value: entry ? String(entry.value) : ""
+    readonly property string label: entry ? String(entry.label) : ""
+    readonly property string glyph: entry ? String(entry.icon) : ""
+    readonly property bool selected: {
+      if (!root.fx) return false
+      if (mixRow.slot === 2) return root.fx.customShaderC === mixRow.value
+      if (mixRow.slot === 1) return root.fx.customShaderB === mixRow.value
+      return root.fx.customShaderA === mixRow.value
+    }
+    readonly property int cursorIndex: mixRow.section === "layerC"
+      ? root.layerCIndex
+      : (mixRow.section === "layerB" ? root.layerBIndex : root.layerAIndex)
+
+    hasCursor: root.cursorActive && root.focusSection === mixRow.section && mixRow.cursorIndex === mixRow.rowIndex
+    current: selected
+    foreground: root.foreground
+
+    implicitHeight: mixContent.implicitHeight + Style.space(10)
+
+    MouseArea {
+      anchors.fill: parent
+      hoverEnabled: true
+      cursorShape: Qt.PointingHandCursor
+      onEntered: {
+        root.cursorActive = true
+        root.focusSection = mixRow.section
+        if (mixRow.section === "layerC") root.layerCIndex = mixRow.rowIndex
+        else if (mixRow.section === "layerB") root.layerBIndex = mixRow.rowIndex
+        else root.layerAIndex = mixRow.rowIndex
+      }
+      onClicked: if (root.fx) root.fx.setCustomShader(mixRow.slot, mixRow.value)
+    }
+
+    RowLayout {
+      id: mixContent
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      anchors.leftMargin: Style.space(10)
+      anchors.rightMargin: Style.space(10)
+      spacing: Style.space(10)
+
+      Text {
+        text: mixRow.glyph
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.icon
+        Layout.alignment: Qt.AlignVCenter
+      }
+
+      Text {
+        Layout.fillWidth: true
+        text: mixRow.label
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.body
+        font.bold: mixRow.selected
+        elide: Text.ElideRight
+      }
+    }
+  }
+
   component ResetRow: CursorSurface {
     id: resetRow
     hasCursor: root.cursorActive && root.focusSection === "reset"
@@ -571,21 +1032,41 @@ Panel {
     }
   }
 
-  component TweakSlider: Column {
+  component TweakField: Column {
     id: tweakCol
-    property string label: ""
-    property string paramKey: ""
-    property real maximum: 1
+    property var field: null
     property int rowIndex: 0
     spacing: Style.space(4)
 
+    readonly property string paramKey: field ? String(field.key) : ""
+    readonly property string paramPreset: field && field.preset ? String(field.preset) : root.tweakPreset
+    readonly property string label: field ? String(field.label) : ""
+    readonly property real maximum: field && field.max ? field.max : Model.fieldMaximum(tweakCol.paramPreset, tweakCol.paramKey)
+    readonly property real minimum: field && field.min !== undefined && field.min !== null
+      ? field.min
+      : Model.fieldMinimum(tweakCol.paramPreset, tweakCol.paramKey)
+    readonly property bool isCheck: !!(field && field.kind === "check")
     readonly property real paramValue: root.fx
-      ? Model.paramValue(root.fx.params, root.tweakPreset, tweakCol.paramKey, 1)
-      : 1
+      ? Model.paramValue(root.fx.params, tweakCol.paramPreset, tweakCol.paramKey, tweakCol.isCheck ? 0 : 1)
+      : (tweakCol.isCheck ? 0 : 1)
+    readonly property bool rowCursor: root.cursorActive && root.focusSection === "tweaks" && root.tweakIndex === tweakCol.rowIndex
+    readonly property bool checked: tweakCol.paramValue >= 0.5
+
+    function commit(v, persist) {
+      if (root.fx) root.fx.setParam(tweakCol.paramPreset, tweakCol.paramKey, v, persist)
+    }
+
+    function focusRow() {
+      root.cursorActive = true
+      root.focusSection = "tweaks"
+      root.tweakIndex = tweakCol.rowIndex
+    }
 
     Text {
       width: parent.width
-      text: tweakCol.label + "  " + Math.round(tweakCol.paramValue * 100) + "%"
+      text: tweakCol.isCheck
+        ? (tweakCol.label + (tweakCol.checked ? "  On" : "  Off"))
+        : (tweakCol.label + "  " + Math.round(tweakCol.paramValue * 100) + "%")
       color: root.dim
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
@@ -593,9 +1074,38 @@ Panel {
     }
 
     CursorSurface {
+      visible: tweakCol.isCheck
       width: parent.width
-      height: slider.implicitHeight + Style.spacing.controlGap
-      hasCursor: root.cursorActive && root.focusSection === "tweaks" && root.tweakIndex === tweakCol.rowIndex
+      height: visible ? checkSwitch.implicitHeight + Style.spacing.controlGap : 0
+      hasCursor: tweakCol.rowCursor
+      foreground: root.foreground
+      outline: true
+
+      MouseArea {
+        anchors.fill: parent
+        hoverEnabled: true
+        cursorShape: Qt.PointingHandCursor
+        onEntered: tweakCol.focusRow()
+        onClicked: tweakCol.commit(tweakCol.checked ? 0 : 1, true)
+      }
+
+      ToggleSwitch {
+        id: checkSwitch
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.left: parent.left
+        anchors.leftMargin: Style.space(6)
+        checked: tweakCol.checked
+        interactive: false
+        hasCursor: tweakCol.rowCursor
+        foreground: root.foreground
+      }
+    }
+
+    CursorSurface {
+      visible: !tweakCol.isCheck
+      width: parent.width
+      height: visible ? slider.implicitHeight + Style.spacing.controlGap : 0
+      hasCursor: tweakCol.rowCursor
       foreground: root.foreground
       outline: true
 
@@ -605,24 +1115,16 @@ Panel {
         anchors.fill: parent
         anchors.leftMargin: Style.space(6)
         anchors.rightMargin: Style.space(6)
-        minimum: 0
+        minimum: tweakCol.minimum
         maximum: tweakCol.maximum
         step: tweakCol.maximum > 1 ? 0.1 : 0.05
         value: tweakCol.paramValue
-        onMoved: function(v) {
-          if (root.fx) root.fx.setParam(root.tweakPreset, tweakCol.paramKey, v, false)
-        }
-        onReleased: function(v) {
-          if (root.fx) root.fx.setParam(root.tweakPreset, tweakCol.paramKey, v, true)
-        }
+        onMoved: function(v) { tweakCol.commit(v, false) }
+        onReleased: function(v) { tweakCol.commit(v, true) }
       }
 
       HoverHandler {
-        onHoveredChanged: if (hovered) {
-          root.cursorActive = true
-          root.focusSection = "tweaks"
-          root.tweakIndex = tweakCol.rowIndex
-        }
+        onHoveredChanged: if (hovered) tweakCol.focusRow()
       }
     }
   }

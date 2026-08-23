@@ -1,0 +1,28 @@
+---
+description: Fragment shader overlay conventions
+globs: shaders/**
+alwaysApply: false
+---
+
+# Shaders
+
+- `#version 440`, `qt_TexCoord0` (y=0 top), `fragColor` premultiplied.
+- Copy the existing `layout(std140, binding = 0) uniform buf` from another `.frag`; do not drop unused uniforms. Keep `float quality` last (0 low … 3 extreme).
+- Time: `time * <baseline> * max(speed, 0.0)`. Fog baseline ~`0.175`; sunny ~`3.5`.
+- Fog = FBM clouds only. No extra ground/top mist unless asked.
+- Prefer wiring unused uniforms (`scale`, `glow`, `density`, …) before adding new std140 fields.
+- Rebuild: service `scanShaders` / `/usr/lib/qt6/bin/qsb --qt6 -o file.frag.qsb file.frag`.
+
+## Qt overlay runtime (hard)
+
+`qsb` succeeding is **not** enough. If the live ShaderEffect rejects the stage, the **whole overlay is blank** (storm rain disappears too). Revert to the last scalar `boltPoint` / `strokeChannel` path in `stormy.frag` rather than iterating.
+
+Do **not** use in these `.frag` files (confirmed to blank Stormy on this stack):
+
+- Writable global or local `vec2` arrays, `inout vec2 pts[N]`
+- Midpoint-displacement that walks integer intervals / early-returns (`evalBoltPt`)
+- Large `const float[]` / `const vec2[]` tables with a dynamic index (prebaked bolts)
+
+Stay on scalars, `vec2`, and small fixed-count loops (the existing 5-octave `boltPoint` + 16-segment stroke). Do not port Shadertoy bolt builders that store polylines.
+
+A library of shapes would need data **outside** the fragment shader (e.g. a texture atlas). Do not try more GLSL storage tricks for lightning.

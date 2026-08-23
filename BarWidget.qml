@@ -46,6 +46,17 @@ BarWidget {
     function show() { root.open() }
     function hide() { root.close() }
     function toggle() { root.togglePanel() }
+    function preview(preset: string): string {
+      return root.fx && root.fx.previewPreset ? root.fx.previewPreset(preset) : "no-service"
+    }
+    function overlay(): string {
+      return root.fx && root.fx.overlayDebugState ? root.fx.overlayDebugState() : "no-service"
+    }
+    function quality(level: string): string {
+      if (!root.fx || typeof root.fx.setQuality !== "function") return "no-service"
+      root.fx.setQuality(level)
+      return root.fx.quality
+    }
   }
 
   implicitWidth: button.implicitWidth

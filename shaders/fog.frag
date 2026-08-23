@@ -18,6 +18,8 @@ layout(std140, binding = 0) uniform buf {
     float scale;
     float glow;
     float lightning;
+    float frequency;
+    float quality;
 };
 
 float hash(vec2 p) {
@@ -37,13 +39,24 @@ float noise(vec2 p) {
     return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
-float fbm(vec2 p) {
+float fbm(vec2 p, int octaves) {
     float v = 0.0;
     float a = 0.5;
-    v += a * noise(p); p = p * 2.03 + vec2(17.1, 9.2); a *= 0.5;
-    v += a * noise(p); p = p * 2.03 + vec2(3.7, 13.8); a *= 0.5;
-    v += a * noise(p); p = p * 2.03 + vec2(11.3, 5.4); a *= 0.5;
-    v += a * noise(p); p = p * 2.03 + vec2(7.9, 21.6); a *= 0.5;
+    v += a * noise(p);
+    if (octaves < 2) return v;
+    p = p * 2.03 + vec2(17.1, 9.2); a *= 0.5;
+    v += a * noise(p);
+    if (octaves < 3) return v;
+    p = p * 2.03 + vec2(3.7, 13.8); a *= 0.5;
+    v += a * noise(p);
+    if (octaves < 4) return v;
+    p = p * 2.03 + vec2(11.3, 5.4); a *= 0.5;
+    v += a * noise(p);
+    if (octaves < 5) return v;
+    p = p * 2.03 + vec2(7.9, 21.6); a *= 0.5;
+    v += a * noise(p);
+    if (octaves < 6) return v;
+    p = p * 2.03 + vec2(19.4, 2.6); a *= 0.5;
     v += a * noise(p);
     return v;
 }
@@ -53,10 +66,13 @@ void main() {
     float aspect = resolution.x / max(resolution.y, 1.0);
     vec2 p = vec2(uv.x * aspect, uv.y);
 
-    float t = time * 0.035 * max(speed, 0.0);
+    float t = time * 0.175 * max(speed, 0.0);
     vec2 drift = vec2(t * 0.42, t * 0.11);
-    float n = fbm(p * 1.65 + drift);
-    n = fbm(p * 1.15 + vec2(n * 0.85, -t * 0.18) + drift * 0.35);
+    int octaves = quality < 0.5 ? 2 : quality < 1.5 ? 3 : quality < 2.5 ? 5 : 6;
+    float feat = mix(2.6, 0.55, clamp(scale, 0.0, 2.0) * 0.5);
+    float n = fbm(p * 1.65 * feat + drift, octaves);
+    if (quality > 0.5)
+        n = fbm(p * 1.15 * feat + vec2(n * 0.85, -t * 0.18) + drift * 0.35, octaves);
 
     float height = smoothstep(1.05, 0.08, uv.y);
     float groundClear = smoothstep(0.0, 0.22, uv.y);
@@ -70,5 +86,5 @@ void main() {
 
     float alpha = clamp(cover * 0.48, 0.0, 0.72);
     fragColor = vec4(col * alpha, alpha) * qt_Opacity * clamp(strength, 0.0, 1.0);
-    fragColor.a += 0.0 * (glow + lightning + scale);
+    fragColor.a += 0.0 * (glow + lightning);
 }

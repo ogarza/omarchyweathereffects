@@ -15,9 +15,11 @@ layout(std140, binding = 0) uniform buf {
     float scale;
     float glow;
     float lightning;
+    float frequency;
+    float quality;
 };
 
-const int MAX_LAYERS = 90;
+const int MAX_LAYERS = 108;
 const float SPEED = 0.6;
 
 void main() {
@@ -40,6 +42,8 @@ void main() {
     float layerCount = dens <= 1.0
         ? mix(6.0, 50.0, dens)
         : mix(50.0, 90.0, dens - 1.0);
+    float qCap = quality < 0.5 ? 0.35 : quality < 1.5 ? 0.55 : quality < 2.5 ? 1.0 : 1.2;
+    layerCount *= qCap;
     float depth = dens <= 1.0
         ? mix(0.85, 0.5, dens)
         : mix(0.5, 0.16, dens - 1.0);
@@ -67,8 +71,8 @@ void main() {
         acc += vec3(smoothstep(edge, -edge, d) * (r.x / (1.0 + 0.02 * fi * depth)));
     }
 
-    float alpha = clamp(acc.x, 0.0, 0.85);
-    vec3 col = vec3(0.93, 0.97, 1.0);
+    float alpha = clamp(acc.x * mix(0.55, 1.25, clamp(glow, 0.0, 2.0) * 0.5), 0.0, 0.85);
+    vec3 col = mix(vec3(0.72, 0.80, 0.90), vec3(0.93, 0.97, 1.0), clamp(glow, 0.0, 2.0) * 0.5);
     fragColor = vec4(col * alpha, alpha) * qt_Opacity * clamp(strength, 0.0, 1.0);
-    fragColor.a += 0.0 * (glow + lightning);
+    fragColor.a += 0.0 * lightning;
 }
