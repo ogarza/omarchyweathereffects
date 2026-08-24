@@ -2,7 +2,7 @@
 
 Fullscreen weather on your Omarchy desktop: rain on glass, snow, clouds, sun, storms, fire, rainbows, and mixes. Most of it is a transparent overlay. Rain refraction and heat haze go through Hyprland so they warp the real desktop, not a painted copy.
 
-Plugin id: `ogarza.weather` · version **1.6.0**
+Plugin id: `ogarza.weather` · version **1.6.1**
 
 ## Install
 
@@ -42,7 +42,7 @@ The last two lines drop a leftover Hyprland shader and put damage tracking back 
 - **Left-click** the bar icon to open the panel (modes and quality on the left, sliders on the right).
 - **Right-click** to turn the overlay on or off.
 
-**Quality** (Low, Medium, High, Extreme) trades sharpness for cost. High is the default and looks good on most machines. Extreme is full resolution and a bit more shader work. If the desktop feels heavy, drop quality first.
+**Quality** (Low, Medium, High, Extreme) trades sharpness for cost. High is the default. The overlay still renders at 33% / 50% / 75% / 100% of native pixels. Rain and Stormy drop work no longer drops as far: Low uses the old Medium layers, Medium matches High, Extreme still adds another drop pass. If the desktop feels heavy, drop quality first.
 
 **Hyprland distortion** is a global switch for refraction and haze. On (the default) warps the real desktop. Off leaves those sliders alone but uses the painted overlay only, and clears the Hyprland shader if this plugin had applied it.
 
@@ -52,24 +52,24 @@ Mode changes in the panel fade over about two seconds. Follow fades forecast cha
 
 | Mode | Effect |
 |------|--------|
-| None | Overlay off (default) |
-| Rain | Drops on glass that refract the desktop (Refract 0 uses the painted look instead) |
-| Snow | Falling snow |
-| Cloud/Fog | Soft drifting clouds |
-| Sunny | Warm glow by day, cooler light after sunset. Optional heat haze. |
-| Partly cloudy | Clouds and sun |
-| Overcast | Heavy clouds, faint sun |
-| Sun shower | Sun and rain (optional rainbow, like every other condition) |
-| Moonlit clouds | Clouds and moon |
-| Drizzle | Light rain through haze |
-| Snow squall | Snow through haze |
-| Wintry mix | Rain and snow |
-| Stormy | Diagonal rain with desktop refraction, lightning, and a sky flash |
-| Follow | Matches current weather for your Omarchy location |
-| Exclusive | Same weather source as Follow, but only one type is shown |
-| Fire | Ground fire (manual only). Optional heat haze. |
-| Rainbow | Primary and secondary bows (manual only) |
-| Custom | Up to three stacked shaders; any layer can be None (manual only) |
+| None | Overlay off until you pick an effect (default) |
+| Rain | Glass beads and trails. Hyprland **Refract** warps the desktop (painted rain is skipped while that is live). Refract 0 is painted only. Clicks through a warped drop land a little off |
+| Snow | Falling flakes (overlay only; lower Quality uses fewer layers) |
+| Cloud/Fog | Soft clouds, denser high up; top and bottom faded so the desktop stays readable |
+| Sunny | Warm glow by day. Over civil twilight (sun 0° to −6°, a few minutes) it eases to cool moonlight. **Haze** warps the desktop only when outdoor temperature is at or above **On above** (default 90°F / 32.2°C) |
+| Partly cloudy | Clouds and sun (sun→moonlight like Sunny). Follow becomes Moonlit clouds after sunset |
+| Overcast | Heavy clouds, faint sun (same twilight and haze rules as Sunny) |
+| Sun shower | Sun and rain. Optional rainbow fades at night unless **After sunset** is on |
+| Moonlit clouds | Clouds and moon. Exclusive treats this and Partly cloudy as a match |
+| Drizzle | Light rain through clouds (same refraction rules as Rain) |
+| Snow squall | Snow through clouds (no desktop warp) |
+| Wintry mix | Rain and snow (rain can still refract) |
+| Stormy | Diagonal rain, Gloom wash, overlay lightning (no desktop shake). **Angle** is drop lean. Refraction like Rain |
+| Follow | Live forecast for your Omarchy location. Never Fire, Rainbow, or Custom. Clear = Sunny; thunder = Stormy; partly cloudy → moonlit after sunset. Fades in about ten seconds |
+| Exclusive | Same fetch as Follow; overlay only when weather matches **Track only**. The panel previews until you close it |
+| Fire | Ground fire (manual only). **Haze** is not gated by temperature |
+| Rainbow | Primary and secondary bows (manual only). Hidden after sunset unless **After sunset** is on (**Night glow** / **Night strength**) |
+| Custom | Up to three stacked shaders; **None** turns a layer off (manual only). Sliders are shared with the standalone modes |
 
 The panel lists forecast modes first, then **Manual only** for Fire, Rainbow, and Custom. Mixes open one parameter column per layer. **Add Rainbow** adds a Rainbow column. Custom stacks Layer A / B / C pickers (each can be **None**).
 
@@ -99,6 +99,7 @@ Columns to the right of the mode list show a short description and the sliders f
 - **Position** / **Distance** — sun and moon placement
 - **Horizontal** / **Height** / **Distance** — rainbow placement
 - **Shimmer** — rainbow motion
+- **After sunset** — keep the rainbow at night (off by default). **Night glow** cools the bands toward ice-blue; **Night strength** is how visible the bow stays
 - **Angle** — how much storm rain leans
 - **Flash** — lightning brightness
 - **Frequency** — how often bolts strike
@@ -124,7 +125,7 @@ omarchy-shell ogarza.weather <command> [args]
 | `mode` `[id]` | Set the mode (`rain`, `follow`, `custom`, …). No argument prints the current id |
 | `track` / `exclusive` `[preset]` | Exclusive **Track only** (`rain`, `stormy`, …). No argument prints the current preset |
 | `layer` `<a\|b\|c>` `[shader]` | Custom layer shader (`none` turns a slot off). No shader prints the current pick |
-| `param` `<preset>` `<key>` `[value]` | Read or set a slider. Value is the stored number, or a percent (`80%`). `enableC` is `on`/`off`. Temperature is °C, or °F with an `F` suffix |
+| `param` `<preset>` `<key>` `[value]` | Read or set a slider. Value is the stored number, or a percent (`80%`). `enableC` and `nightVisible` are `on`/`off`. Temperature is °C, or °F with an `F` suffix |
 | `reset` | Restore every mode’s sliders (does not change mode, quality, or Hyprland distortion) |
 | `refresh` | Fetch Follow / Exclusive weather again |
 | `preview <preset>` | Switch to Follow and fade to that look |

@@ -2,24 +2,24 @@
 // omarchy-weather-icon groups), and shader filename helpers.
 
 var modes = [
-  { value: "none", label: "None", icon: "󰅖", description: "No overlay. The desktop stays clear." },
-  { value: "rain", label: "Rain", icon: "󰖗", description: "Rain on glass: beads, trails, and desktop refraction." },
-  { value: "snow", label: "Snow", icon: "󰖘", description: "Falling flakes with a bit of depth." },
-  { value: "fog", label: "Cloud/Fog", icon: "󰖑", description: "Soft clouds drifting across the sky." },
-  { value: "sunny", label: "Sunny", icon: "󰖙", description: "Warm sun glow, faint shafts, and dust motes. Optional heat haze." },
-  { value: "partly", label: "Partly cloudy", icon: "󰖕", description: "Broken clouds with sun breaking through." },
-  { value: "overcast", label: "Overcast", icon: "󰖐", description: "A heavy cloud deck and a faint sun." },
-  { value: "sunshower", label: "Sun shower", icon: "󰖖", description: "Sun and rain at the same time. Optional rainbow." },
-  { value: "moonlit", label: "Moonlit clouds", icon: "󰖔", description: "Night clouds with a cool moon." },
-  { value: "drizzle", label: "Drizzle", icon: "󰖑", description: "Light rain through a thin haze." },
-  { value: "squall", label: "Snow squall", icon: "󰼶", description: "Snow driven through haze." },
-  { value: "wintry", label: "Wintry mix", icon: "󰙿", description: "Rain and snow together." },
-  { value: "stormy", label: "Stormy", icon: "󰖓", description: "Diagonal rain that refracts the desktop, a dark wash, lightning, and a brief sky flash." },
-  { value: "follow", label: "Follow", icon: "󰔏", description: "Matches the live forecast for your Omarchy location." },
-  { value: "exclusive", label: "Exclusive", icon: "󰮯", description: "Same forecast as Follow, but only one type is shown." },
-  { value: "fire", label: "Fire", icon: "󰈸", description: "Ground fire along the bottom, with optional heat haze. Manual only — never used by Follow." },
-  { value: "rainbow", label: "Rainbow", icon: "󰟗", description: "Primary and secondary bows. Manual only — never used by Follow." },
-  { value: "custom", label: "Custom", icon: "󰣖", description: "Mix up to three shaders. Set a layer to None to turn it off. Manual only — never used by Follow." }
+  { value: "none", label: "None", icon: "󰅖", description: "No overlay. The desktop stays clear until you pick an effect." },
+  { value: "rain", label: "Rain", icon: "󰖗", description: "Beads and trails on glass. With Hyprland distortion on and Refract above 0, drops warp the real desktop (painted rain is skipped so it is not drawn twice). Clicks through a warped drop land a little off. Refract 0 is the painted look only." },
+  { value: "snow", label: "Snow", icon: "󰖘", description: "Falling flakes with a bit of depth. Overlay only — no desktop warp. Lower Quality draws fewer flake layers." },
+  { value: "fog", label: "Cloud/Fog", icon: "󰖑", description: "Soft FBM clouds, denser toward the upper sky, with the very top and bottom faded so the desktop stays readable. Overlay only." },
+  { value: "sunny", label: "Sunny", icon: "󰖙", description: "Warm glow, faint shafts, and dust. Over civil twilight (sun 0° to −6°, a few minutes) the color eases to cool moonlight. Optional heat haze warps the desktop when Hyprland distortion is on and outdoor temperature is at or above On above (default 90°F / 32.2°C)." },
+  { value: "partly", label: "Partly cloudy", icon: "󰖕", description: "Clouds plus sun. The sun layer uses the same twilight shift to moonlight as Sunny, including the haze temperature gate. In Follow, this condition becomes Moonlit clouds after sunset." },
+  { value: "overcast", label: "Overcast", icon: "󰖐", description: "Heavy clouds with a faint sun (same twilight-to-moonlight shift and haze gate as Sunny)." },
+  { value: "sunshower", label: "Sun shower", icon: "󰖖", description: "Sun and rain together. Rain refraction follows the Rain rules. Add Rainbow is off by default; that bow fades after sunset unless After sunset is on." },
+  { value: "moonlit", label: "Moonlit clouds", icon: "󰖔", description: "Clouds with a cool moon (the sun shader forced to night). Haze still uses Sunny’s On above temperature. Follow uses this for partly cloudy after sunset. Exclusive treats Partly cloudy and Moonlit clouds as a match for each other." },
+  { value: "drizzle", label: "Drizzle", icon: "󰖑", description: "Light rain through thin clouds. Rain refraction follows the Rain rules (Hyprland warp skips the painted drops)." },
+  { value: "squall", label: "Snow squall", icon: "󰼶", description: "Snow driven through clouds. Overlay only — snow does not warp the desktop." },
+  { value: "wintry", label: "Wintry mix", icon: "󰙿", description: "Rain and snow together. The rain layer can still refract the desktop; painted rain is skipped while that warp is live." },
+  { value: "stormy", label: "Stormy", icon: "󰖓", description: "Diagonal rain, a dark Gloom wash, lightning bolts, and a brief sky flash. Refraction follows the Rain rules; bolts stay on the overlay (no desktop shake). Angle is how much the rain leans, not bolt direction." },
+  { value: "follow", label: "Follow", icon: "󰔏", description: "Matches the live forecast for your Omarchy location (Open-Meteo with coords, else wttr). Waits for location before the first fetch. Clear sky is Sunny; thunder is Stormy; partly cloudy becomes Moonlit clouds after sunset. Never picks Fire, Rainbow, or Custom. Forecast changes fade over about ten seconds." },
+  { value: "exclusive", label: "Exclusive", icon: "󰮯", description: "Same forecast as Follow, but the overlay runs only when live weather matches Track only. This panel previews the tracked look until you close it. Partly cloudy and Moonlit clouds count as a match for each other. Fire, Rainbow, and Custom cannot be tracked." },
+  { value: "fire", label: "Fire", icon: "󰈸", description: "Flames along the bottom of the screen. Optional heat haze always uses the Fire Haze slider (not gated by outdoor temperature). Manual only — Follow never picks this." },
+  { value: "rainbow", label: "Rainbow", icon: "󰟗", description: "Primary and secondary bows opposite the sun. Invisible after sunset unless After sunset is on; then Night glow cools the bands and Night strength sets how visible they stay. Manual only — Follow never picks this. Add Rainbow on other modes shares these sliders." },
+  { value: "custom", label: "Custom", icon: "󰣖", description: "Stack up to three shaders. None turns a layer off. Sliders are shared with the standalone modes (changing rain density here also changes Rain). Manual only — Follow never picks this." }
 ]
 
 // Bar glyph: sparkles = desktop effects, not a forecast (those stay in the panel).
@@ -511,9 +511,9 @@ function iconForMode(value) {
 function descriptionForPreset(preset, nightFactor) {
   var v = String(preset || "")
   if (v === "sunny" && moonlightActive(nightFactor))
-    return "Cool moonlight wash, shafts, and faint dust after sunset."
+    return "Cool moonlight wash, shafts, and faint dust. Color eases over civil twilight (sun 0° to −6°, a few minutes). Heat haze still waits for outdoor temperature at or above On above."
   if (v === "partly" && moonlightActive(nightFactor))
-    return "Broken clouds with moonlight instead of sun."
+    return "Broken clouds with moonlight instead of sun (same twilight blend as Sunny). Follow would map this to Moonlit clouds. Haze still uses Sunny’s On above temperature."
   var entry = modeEntry(v)
   return entry && entry.description ? String(entry.description) : ""
 }
@@ -615,7 +615,10 @@ var tweakFields = {
     { key: "azimuth", label: "Horizontal", kind: "slider", max: 2 },
     { key: "lightning", label: "Height", kind: "slider", min: -2, max: 2 },
     { key: "distance", label: "Distance", kind: "slider", max: 2 },
-    { key: "speed", label: "Shimmer", kind: "slider", max: 2 }
+    { key: "speed", label: "Shimmer", kind: "slider", max: 2 },
+    { key: "nightVisible", label: "After sunset", kind: "check", max: 1 },
+    { key: "nightTint", label: "Night glow", kind: "slider", max: 2, requires: "nightVisible" },
+    { key: "nightStrength", label: "Night strength", kind: "slider", max: 1, requires: "nightVisible" }
   ]
 }
 
@@ -627,7 +630,7 @@ function defaultParams() {
     sunny: { strength: 1, glow: 1, speed: 1, density: 1.2, azimuth: 1.2, distance: 1, haze: 0.5, temperature: defaultHazeTempC, enableC: 0, strengthC: 0.65 },
     stormy: { strength: 1, density: 1, speed: 1.15, scale: 1, sheen: 0.6, refract: 1, lightning: 1.5, frequency: 1, glow: 1, azimuth: 1, enableC: 0, strengthC: 0.65 },
     fire: { strength: 1, density: 1, speed: 0.5, scale: 1, glow: 1, haze: 0.5, enableC: 0, strengthC: 0.65 },
-    rainbow: { strength: 1, glow: 1, density: 1, scale: 1, azimuth: 0.8, lightning: 0.65, distance: 1, speed: 1 }
+    rainbow: { strength: 1, glow: 1, density: 1, scale: 1, azimuth: 0.8, lightning: 0.65, distance: 1, speed: 1, nightVisible: 0, nightTint: 1, nightStrength: 0.7 }
   }
   for (var id in mixRecipes) {
     var layers = mixRecipes[id].layers
@@ -649,6 +652,7 @@ function cloneField(field, preset, label) {
     format: field.format,
     min: field.min,
     max: field.max,
+    requires: field.requires,
     preset: preset
   }
 }
@@ -657,13 +661,17 @@ function strengthField(preset, label) {
   return { key: "strength", label: label || "Strength", kind: "slider", max: 1, preset: preset }
 }
 
-function appendLayerShaderFields(rows, shader) {
+function appendLayerShaderFields(rows, shader, params) {
   var shaderFields = tweakFields[shader] || []
-  for (var i = 0; i < shaderFields.length; i++)
-    rows.push(cloneField(shaderFields[i], shader, shaderFields[i].label))
+  for (var i = 0; i < shaderFields.length; i++) {
+    var field = shaderFields[i]
+    if (field.requires && paramValue(params, shader, field.requires, 0) < 0.5)
+      continue
+    rows.push(cloneField(field, shader, field.label))
+  }
 }
 
-function fieldsForCustomLayer(slot, shaderA, shaderB, shaderC) {
+function fieldsForCustomLayer(slot, shaderA, shaderB, shaderC, params) {
   var recipe = mixRecipe("custom", shaderA, shaderB, shaderC)
   if (!recipe || !recipe.layers[slot]) return []
   var layer = recipe.layers[slot]
@@ -675,14 +683,14 @@ function fieldsForCustomLayer(slot, shaderA, shaderB, shaderC) {
     max: 1,
     preset: "custom"
   }]
-  appendLayerShaderFields(rows, layer.shader)
+  appendLayerShaderFields(rows, layer.shader, params)
   return rows
 }
 
 function fieldsForVisualLayer(visual, slot, shaderA, shaderB, shaderC, params) {
   var m = normalizedMode(visual)
   if (m === "custom")
-    return fieldsForCustomLayer(slot, shaderA, shaderB, shaderC)
+    return fieldsForCustomLayer(slot, shaderA, shaderB, shaderC, params)
   if (!isVisualPreset(m)) return []
   var recipe = mixRecipe(m, shaderA, shaderB, shaderC)
   if (recipe) {
@@ -707,13 +715,13 @@ function fieldsForVisualLayer(visual, slot, shaderA, shaderB, shaderC, params) {
       max: 1,
       preset: m
     })
-    appendLayerShaderFields(mixRows, layer.shader)
+    appendLayerShaderFields(mixRows, layer.shader, params)
     return mixRows
   }
   if (slot === 0) {
     if (!isEffectPreset(m)) return []
     var singleRows = [strengthField(m, "Strength")]
-    appendLayerShaderFields(singleRows, m)
+    appendLayerShaderFields(singleRows, m, params)
     return singleRows
   }
   if (slot === 2) {
@@ -734,7 +742,7 @@ function fieldsForVisualLayer(visual, slot, shaderA, shaderB, shaderC, params) {
         max: 1,
         preset: m
       })
-      appendLayerShaderFields(extraRows, extra.shader)
+      appendLayerShaderFields(extraRows, extra.shader, params)
     }
     return extraRows
   }
@@ -769,9 +777,14 @@ function fieldsForMode(mode) {
   return fieldsForPanel(mode)
 }
 
+function isCheckParam(key) {
+  var k = String(key || "")
+  return k === "enableC" || k === "nightVisible"
+}
+
 function fieldMaximum(mode, key) {
   var k = String(key || "")
-  if (k === "strength" || k === "strengthA" || k === "strengthB" || k === "strengthC" || k === "enableC") return 1
+  if (k === "strength" || k === "strengthA" || k === "strengthB" || k === "strengthC" || isCheckParam(k)) return 1
   if (k === "refract" || k === "haze") return 1
   if (k === "temperature") return 49
   var fields = tweakFields[normalizedMode(mode)] || []
@@ -805,14 +818,14 @@ function fieldNudgeStep(field) {
 function clampParam(key, value, mode) {
   var n = parseFloat(value)
   if (isNaN(n)) {
-    if (key === "enableC") n = 0
+    if (isCheckParam(key)) n = 0
     else if (key === "strengthA" || key === "strengthB" || key === "strengthC") n = 0.5
     else if (key === "temperature") n = defaultHazeTempC
     else n = 1
   }
   if (key === "temperature" && n <= 1)
     n = defaultHazeTempC
-  if (key === "enableC") return n >= 0.5 ? 1 : 0
+  if (isCheckParam(key)) return n >= 0.5 ? 1 : 0
   return Math.max(fieldMinimum(mode, key), Math.min(fieldMaximum(mode, key), n))
 }
 

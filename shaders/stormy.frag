@@ -62,10 +62,14 @@ layout(std140, binding = 0) uniform buf {
     float speed;
     float scale;
     float glow;
-    float lightning;
-    float azimuth;
-    float frequency;
     float sheen;
+    float lightning;
+    float frequency;
+    float azimuth;
+    float sunDistance;
+    float night;
+    float nightTint;
+    float nightStrength;
     float quality;
 };
 
@@ -278,8 +282,8 @@ vec2 windSpace(vec2 uv, vec2 wind) {
 vec4 Raindrops(vec2 uv, float t, vec2 wind) {
     vec2 windUV = windSpace(uv, wind);
     vec4 roll1 = RollingRaindrops(windUV, t, RollingRaindropUVScaleLayer01);
-    vec3 stat = quality < 0.5 ? vec3(0.0) : StaticRaindrops(uv, t, StaticRaindropUVScale);
-    vec4 roll2 = quality < 1.5 ? vec4(0.0) : RollingRaindrops(windUV * 1.7, t, RollingRaindropUVScaleLayer02);
+    vec3 stat = StaticRaindrops(uv, t, StaticRaindropUVScale);
+    vec4 roll2 = quality < 0.5 ? vec4(0.0) : RollingRaindrops(windUV * 1.7, t, RollingRaindropUVScaleLayer02);
     vec4 roll3 = quality < 2.5 ? vec4(0.0) : RollingRaindrops(windUV * 2.35, t, RollingRaindropUVScaleLayer02 * 1.15);
 
     float height = stat.x + roll1.x + roll2.x + roll3.x;
@@ -310,8 +314,8 @@ vec2 boltPoint(float seed, float t, vec2 a, vec2 b) {
     vec2 p = mix(a, b, t);
     float disp = 0.0;
     float freq = 2.0;
-    float amp = 0.078 * resolution.x;
-    int octaves = quality < 0.5 ? 3 : quality < 1.5 ? 4 : quality < 2.5 ? 5 : 6;
+    float amp = 0.078 * max(resolution.x, 1.0);
+    int octaves = quality < 0.5 ? 4 : quality < 2.5 ? 5 : 6;
     for (int o = 0; o < 6; o++) {
         if (o >= octaves)
             break;
@@ -347,37 +351,36 @@ float lightningBolt(vec2 frag, float seed) {
     float dpr = max(pixelRatio, 1.0);
     float corePx = 1.05 * dpr;
     float glowPx = 4.2 * dpr;
-    float x0 = (0.18 + Random(vec2(seed, 1.4), RandomSeed) * 0.64) * resolution.x;
-    vec2 a = vec2(x0, resolution.y * 0.995);
+    vec2 res = max(resolution, vec2(1.0));
+    float x0 = (0.18 + Random(vec2(seed, 1.4), RandomSeed) * 0.64) * res.x;
+    vec2 a = vec2(x0, res.y * 0.995);
     vec2 b = vec2(
-        x0 + (Random(vec2(seed, 2.2), RandomSeed) - 0.5) * resolution.x * 0.22,
-        resolution.y * mix(0.05, 0.20, Random(vec2(seed, 2.8), RandomSeed))
+        x0 + (Random(vec2(seed, 2.2), RandomSeed) - 0.5) * res.x * 0.22,
+        res.y * mix(0.05, 0.20, Random(vec2(seed, 2.8), RandomSeed))
     );
-    int segs = quality < 0.5 ? 8 : quality < 1.5 ? 12 : quality < 2.5 ? 16 : 20;
+    int segs = quality < 0.5 ? 12 : quality < 2.5 ? 16 : 20;
     float acc = strokeChannel(frag, seed, a, b, segs, corePx, glowPx);
     float bt = mix(0.22, 0.62, Random(vec2(seed, 5.1), RandomSeed));
     vec2 origin = boltPoint(seed, bt, a, b);
     float side = Random(vec2(seed, 6.2), RandomSeed) < 0.5 ? -1.0 : 1.0;
     vec2 bend = origin + vec2(
-        side * mix(0.08, 0.22, Random(vec2(seed, 6.8), RandomSeed)) * resolution.x,
-        -mix(0.12, 0.30, Random(vec2(seed, 7.3), RandomSeed)) * resolution.y
+        side * mix(0.08, 0.22, Random(vec2(seed, 6.8), RandomSeed)) * res.x,
+        -mix(0.12, 0.30, Random(vec2(seed, 7.3), RandomSeed)) * res.y
     );
-    acc = max(acc, strokeChannel(frag, seed + 19.0, origin, bend, quality < 0.5 ? 4 : 6, corePx * 0.68, glowPx * 0.68));
-    if (quality > 0.5) {
-        float bt2 = mix(0.38, 0.78, Random(vec2(seed, 8.1), RandomSeed));
-        vec2 origin2 = boltPoint(seed, bt2, a, b);
-        vec2 bend2 = origin2 + vec2(
-            -side * mix(0.05, 0.16, Random(vec2(seed, 8.6), RandomSeed)) * resolution.x,
-            -mix(0.08, 0.18, Random(vec2(seed, 9.0), RandomSeed)) * resolution.y
-        );
-        acc = max(acc, strokeChannel(frag, seed + 31.0, origin2, bend2, 5, corePx * 0.52, glowPx * 0.52));
-    }
+    acc = max(acc, strokeChannel(frag, seed + 19.0, origin, bend, 6, corePx * 0.68, glowPx * 0.68));
+    float bt2 = mix(0.38, 0.78, Random(vec2(seed, 8.1), RandomSeed));
+    vec2 origin2 = boltPoint(seed, bt2, a, b);
+    vec2 bend2 = origin2 + vec2(
+        -side * mix(0.05, 0.16, Random(vec2(seed, 8.6), RandomSeed)) * res.x,
+        -mix(0.08, 0.18, Random(vec2(seed, 9.0), RandomSeed)) * res.y
+    );
+    acc = max(acc, strokeChannel(frag, seed + 31.0, origin2, bend2, 5, corePx * 0.52, glowPx * 0.52));
     if (quality > 2.5) {
         float bt3 = mix(0.48, 0.88, Random(vec2(seed, 10.1), RandomSeed));
         vec2 origin3 = boltPoint(seed, bt3, a, b);
         vec2 bend3 = origin3 + vec2(
-            side * mix(0.03, 0.10, Random(vec2(seed, 10.6), RandomSeed)) * resolution.x,
-            -mix(0.06, 0.14, Random(vec2(seed, 11.0), RandomSeed)) * resolution.y
+            side * mix(0.03, 0.10, Random(vec2(seed, 10.6), RandomSeed)) * res.x,
+            -mix(0.06, 0.14, Random(vec2(seed, 11.0), RandomSeed)) * res.y
         );
         acc = max(acc, strokeChannel(frag, seed + 47.0, origin3, bend3, 4, corePx * 0.40, glowPx * 0.40));
     }
@@ -392,7 +395,7 @@ float returnStrokes(float phase, float window, float decay, float doubleBlink) {
     float attack = smoothstep(0.0, 0.02, t);
     float env = 1.15 * exp(-t * decay * 0.85);
     env += 0.24 * exp(-t * decay * 0.22);
-    if (quality > 1.5) {
+    if (quality > 0.5) {
         env += 0.36 * exp(-pow((t - 0.035) * 16.0, 2.0));
         env += 0.22 * exp(-pow((t - 0.09) * 18.0, 2.0));
         env += 0.12 * exp(-pow((t - 0.16) * 18.0, 2.0));
@@ -410,13 +413,13 @@ float returnStrokes(float phase, float window, float decay, float doubleBlink) {
 }
 
 void main() {
-    float dpr = max(pixelRatio, 1.0);
-    float unit = 1080.0 * dpr;
+    vec2 res = max(resolution, vec2(1.0));
+    float unit = res.y;
     float spd = max(speed, 0.0);
 
     vec2 screen = vec2(qt_TexCoord0.x, 1.0 - qt_TexCoord0.y);
-    vec2 frag = screen * resolution;
-    vec2 uv = (frag - 0.5 * resolution) / unit;
+    vec2 frag = screen * res;
+    vec2 uv = (frag - 0.5 * res) / unit;
 
     vec2 wind = stormWind();
     vec4 rain = Raindrops(uv, time * StormTimeScale * spd, wind);
@@ -439,12 +442,12 @@ void main() {
 
         float ndotl = max(dot(N, L), 0.0);
         float specBroad = pow(max(dot(N, Hv), 0.0), 28.0);
-        float spec = quality < 1.5 ? 0.0 : pow(max(dot(N, Hv), 0.0), quality > 2.5 ? 140.0 : 96.0);
-        float fresnel = quality < 0.5 ? 0.0 : pow(clamp(1.0 - max(N.z, 0.0), 0.0, 1.0), 6.5);
+        float spec = quality < 0.5 ? 0.0 : pow(max(dot(N, Hv), 0.0), quality > 2.5 ? 140.0 : 96.0);
+        float fresnel = pow(clamp(1.0 - max(N.z, 0.0), 0.0, 1.0), 6.5);
         float steep = length(slope);
 
         float meniscus = 0.0;
-        if (quality > 1.5)
+        if (quality > 0.5)
             meniscus = pow(smoothstep(0.28, 0.82, steep), 2.6) * smoothstep(0.0, 0.02, h)
                 * (1.0 - smoothstep(0.05, 0.16, h));
         float body = smoothstep(0.0, 0.22, h);
@@ -498,4 +501,5 @@ void main() {
 
     vec3 premul = washCol * wash + col * rainAlpha + boltCol * flashAlpha + sheetCol * sheet;
     fragColor = vec4(premul, alpha) * qt_Opacity * clamp(strength, 0.0, 1.0);
+    fragColor.a += 0.0 * (sunDistance + night + nightTint + nightStrength + pixelRatio);
 }

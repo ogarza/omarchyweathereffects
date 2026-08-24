@@ -40,8 +40,14 @@ layout(std140, binding = 0) uniform buf {
     float speed;
     float scale;
     float glow;
+    float sheen;
     float lightning;
     float frequency;
+    float azimuth;
+    float sunDistance;
+    float night;
+    float nightTint;
+    float nightStrength;
     float quality;
 };
 
@@ -98,8 +104,8 @@ void main() {
     float sizeMul = max(scale * 0.3, 0.05);
     float dens = clamp(density, 0.0, 2.0);
 
-    // Shadertoy-style Y-up pixel coords.
-    vec2 frag = vec2(qt_TexCoord0.x, 1.0 - qt_TexCoord0.y) * resolution;
+    vec2 res = max(resolution, vec2(1.0));
+    vec2 frag = vec2(qt_TexCoord0.x, 1.0 - qt_TexCoord0.y) * res;
 
     vec2 fireSpeed = vec2(1.2, 0.1);
     float shift = 1.327 + sin(t * 2.0) / 2.4;
@@ -107,7 +113,7 @@ void main() {
     // Larger scale → larger flame features (less UV zoom).
     float dist = (3.5 - sin(t * 0.4) / 1.89) / sizeMul;
 
-    vec2 p = frag.xy * dist / max(resolution.x, 1.0);
+    vec2 p = frag.xy * dist / res.x;
     p.x -= t / 1.1;
     float q = fbm(p - t * 0.01 + 1.0 * sin(t) / 10.0);
     float qb = quality < 0.5 ? q : fbm(p - t * 0.002 + 0.1 * cos(t) / 5.0);
@@ -125,7 +131,7 @@ void main() {
         fbm(p + q - t * fireSpeed.y)
     );
     vec3 c = mix(c1, c2, fbm(p + r)) + mix(c3, c4, r.x) - mix(c5, c6, r.y);
-    vec3 color = vec3(c * cos(shift * frag.y / max(resolution.y, 1.0)));
+    vec3 color = vec3(c * cos(shift * frag.y / res.y));
     color += 0.05;
     color.r *= 0.8;
 
@@ -137,7 +143,7 @@ void main() {
     color = max(color, vec3(0.0));
 
     // Soft ground-fire falloff so the upper desktop stays readable.
-    float height = frag.y / max(resolution.y, 1.0);
+    float height = frag.y / res.y;
     float groundMask = smoothstep(1.05, 0.12, height);
     groundMask = pow(groundMask, mix(1.35, 0.75, clamp(dens * 0.5, 0.0, 1.0)));
 
@@ -147,5 +153,5 @@ void main() {
 
     float alpha = clamp(luma * groundMask * mix(0.35, 0.85, dens * 0.5), 0.0, 0.78);
     fragColor = vec4(color * alpha, alpha) * qt_Opacity * clamp(strength, 0.0, 1.0);
-    fragColor.a += 0.0 * lightning;
+    fragColor.a += 0.0 * (sheen + lightning + frequency + azimuth + sunDistance + night + nightTint + nightStrength + pixelRatio);
 }

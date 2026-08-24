@@ -17,8 +17,14 @@ layout(std140, binding = 0) uniform buf {
     float speed;
     float scale;
     float glow;
+    float sheen;
     float lightning;
     float frequency;
+    float azimuth;
+    float sunDistance;
+    float night;
+    float nightTint;
+    float nightStrength;
     float quality;
 };
 
@@ -62,8 +68,9 @@ float fbm(vec2 p, int octaves) {
 }
 
 void main() {
+    vec2 res = max(resolution, vec2(1.0));
     vec2 uv = qt_TexCoord0;
-    float aspect = resolution.x / max(resolution.y, 1.0);
+    float aspect = res.x / res.y;
     vec2 p = vec2(uv.x * aspect, uv.y);
 
     float t = time * 0.175 * max(speed, 0.0);
@@ -86,5 +93,5 @@ void main() {
 
     float alpha = clamp(cover * 0.48, 0.0, 0.72);
     fragColor = vec4(col * alpha, alpha) * qt_Opacity * clamp(strength, 0.0, 1.0);
-    fragColor.a += 0.0 * (glow + lightning);
+    fragColor.a += 0.0 * (glow + sheen + lightning + frequency + azimuth + sunDistance + night + nightTint + nightStrength + pixelRatio);
 }

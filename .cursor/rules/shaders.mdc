@@ -7,7 +7,8 @@ alwaysApply: false
 # Shaders
 
 - `#version 440`, `qt_TexCoord0` (y=0 top), `fragColor` premultiplied.
-- Copy the existing `layout(std140, binding = 0) uniform buf` from another `.frag`; do not drop unused uniforms. Keep `float quality` last (0 low … 3 extreme).
+- Copy the existing `layout(std140, binding = 0) uniform buf` from another `.frag`; do not drop unused uniforms. Keep `float quality` last (0 low … 3 extreme). Field order must match `WeatherLayer` (`sheen`, then `lightning` / `frequency` / `azimuth` / `sunDistance` / `night` / `nightTint` / `nightStrength`).
+- `resolution` is framebuffer pixels (DPR × quality scale). Size features with `1.0 / resolution.y` (or `fwidth`) so they stay stable on HiDPI and downscaled quality. `qt_TexCoord0` is still 0–1.
 - Time: `time * <baseline> * max(speed, 0.0)`. Fog baseline ~`0.175`; sunny ~`3.5`.
 - Fog = FBM clouds only. No extra ground/top mist unless asked.
 - Prefer wiring unused uniforms (`scale`, `glow`, `density`, …) before adding new std140 fields.

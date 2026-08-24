@@ -18,11 +18,14 @@ layout(std140, binding = 0) uniform buf {
     float speed;
     float scale;
     float glow;
+    float sheen;
     float lightning;
-    float night;
+    float frequency;
     float azimuth;
     float sunDistance;
-    float frequency;
+    float night;
+    float nightTint;
+    float nightStrength;
     float quality;
 };
 
@@ -31,8 +34,9 @@ float hash11(float n) {
 }
 
 void main() {
+    vec2 res = max(resolution, vec2(1.0));
     vec2 uv = qt_TexCoord0;
-    float aspect = resolution.x / max(resolution.y, 1.0);
+    float aspect = res.x / res.y;
     vec2 p = vec2(uv.x * aspect, uv.y);
 
     float az = clamp(azimuth, 0.0, 2.0);
@@ -94,7 +98,7 @@ void main() {
             fract(sx + t * moteSpeed * 0.35) * aspect,
             fract(sy + t * moteSpeed * 0.22 + sx * 0.1)
         );
-        float r = (0.0018 + hash11(fi + 3.1) * 0.0032) * max(pixelRatio, 1.0);
+        float r = (2.4 + hash11(fi + 3.1) * 4.0) / res.y;
         float d = length(p - pos);
         float spark = smoothstep(r * 2.4, 0.0, d);
         spark *= 0.35 + 0.65 * (0.5 + 0.5 * sin(t * (1.3 + sx * 2.0) + fi));
@@ -112,5 +116,5 @@ void main() {
     alpha = clamp(alpha, 0.0, mix(0.72, 0.22, dAmt * 0.5) * mix(1.0, 0.72, n));
 
     fragColor = vec4(col * alpha, alpha) * qt_Opacity * clamp(strength, 0.0, 1.0);
-    fragColor.a += 0.0 * (lightning + scale + azimuth + sunDistance);
+    fragColor.a += 0.0 * (sheen + lightning + scale + azimuth + sunDistance + nightTint + nightStrength + pixelRatio);
 }

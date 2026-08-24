@@ -390,7 +390,7 @@ Item {
   function parseIpcParam(preset, key, raw) {
     var text = String(raw || "").replace(/^\s+|\s+$/g, "")
     var k = String(key || "")
-    if (k === "enableC") return root.parseOnOffToggle(text, false) ? 1 : 0
+    if (Model.isCheckParam(k)) return root.parseOnOffToggle(text, false) ? 1 : 0
     var lower = text.toLowerCase()
     if (k === "temperature") {
       var imperial = /f$/.test(lower)
@@ -439,9 +439,9 @@ Item {
     var k = String(key || "")
     if (!k) return JSON.stringify(root.params[mode] || {})
     if (!String(value || "").replace(/^\s+|\s+$/g, ""))
-      return String(Model.paramValue(root.params, mode, k, k === "enableC" ? 0 : 1))
+      return String(Model.paramValue(root.params, mode, k, Model.isCheckParam(k) ? 0 : 1))
     root.setParam(mode, k, root.parseIpcParam(mode, k, value), true)
-    return String(Model.paramValue(root.params, mode, k, k === "enableC" ? 0 : 1))
+    return String(Model.paramValue(root.params, mode, k, Model.isCheckParam(k) ? 0 : 1))
   }
 
   function ipcReset() {
@@ -463,7 +463,7 @@ Item {
     var mode = Model.normalizedMode(preset)
     if (!Model.hasTweaks(mode)) return
     var clamped = Model.clampParam(key, value, mode)
-    var current = Model.paramValue(root.params, mode, key, key === "enableC" ? 0 : 1)
+    var current = Model.paramValue(root.params, mode, key, Model.isCheckParam(key) ? 0 : 1)
     if (current === clamped) {
       if (persist !== false) persistSettings()
       return
@@ -477,9 +477,9 @@ Item {
   function nudgeParam(preset, key, dir, step) {
     var amount = parseFloat(step)
     if (isNaN(amount) || amount <= 0) {
-      amount = (key === "enableC") ? 1 : ((key === "strength" || key === "strengthA" || key === "strengthB" || key === "strengthC") ? 0.05 : 0.1)
+      amount = Model.isCheckParam(key) ? 1 : ((key === "strength" || key === "strengthA" || key === "strengthB" || key === "strengthC") ? 0.05 : 0.1)
     }
-    var current = Model.paramValue(root.params, Model.normalizedMode(preset), key, key === "enableC" ? 0 : 1)
+    var current = Model.paramValue(root.params, Model.normalizedMode(preset), key, Model.isCheckParam(key) ? 0 : 1)
     setParam(preset, key, current + dir * amount, true)
   }
 
@@ -750,7 +750,12 @@ Item {
     opacity: Math.max(0, Math.min(1, fade))
     fragmentShader: shaderFile !== "" ? Qt.resolvedUrl("shaders/" + shaderFile) : ""
     property real time: clock.elapsedTime
-    property vector2d resolution: Qt.vector2d(width, height)
+    property vector2d resolution: {
+      var scr = screenInfo
+      var dpr = scr && scr.devicePixelRatio ? Number(scr.devicePixelRatio) : 1.0
+      var sz = Model.qualityTextureSize(width, height, dpr, root.quality)
+      return Qt.vector2d(sz.w, sz.h)
+    }
     property real pixelRatio: {
       var scr = screenInfo
       var dpr = scr && scr.devicePixelRatio ? Number(scr.devicePixelRatio) : 1.0
@@ -764,7 +769,11 @@ Item {
     property real speed: Model.paramValue(root.params, preset || "rain", "speed", 1)
     property real scale: Model.paramValue(root.params, preset || "rain", "scale", 1)
     property real glow: Model.paramValue(root.params, preset || "sunny", "glow", 1)
-    property real sheen: Model.paramValue(root.params, preset === "stormy" ? "stormy" : "rain", "sheen", 0.6)
+    property real sheen: {
+      if (preset === "rainbow")
+        return Model.paramValue(root.params, "rainbow", "nightVisible", 0)
+      return Model.paramValue(root.params, preset === "stormy" ? "stormy" : "rain", "sheen", 0.6)
+    }
     property real lightning: Model.paramValue(root.params, preset || "stormy", "lightning", 1)
     property real frequency: Model.paramValue(root.params, preset || "stormy", "frequency", 1)
     property real azimuth: Model.paramValue(
@@ -785,6 +794,8 @@ Item {
       if (visual === "moonlit") return 1
       return root.nightFactor
     }
+    property real nightTint: Model.paramValue(root.params, "rainbow", "nightTint", 1)
+    property real nightStrength: Model.paramValue(root.params, "rainbow", "nightStrength", 0.7)
     property real quality: Model.qualityRank(root.quality)
   }
 

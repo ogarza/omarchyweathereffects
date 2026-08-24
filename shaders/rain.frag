@@ -48,8 +48,14 @@ layout(std140, binding = 0) uniform buf {
     float speed;
     float scale;
     float glow;
+    float sheen;
     float lightning;
     float frequency;
+    float azimuth;
+    float sunDistance;
+    float night;
+    float nightTint;
+    float nightStrength;
     float quality;
 };
 
@@ -255,8 +261,8 @@ vec4 RollingRaindrops(vec2 uv, float t, float uvScale) {
 
 vec4 Raindrops(vec2 uv, float t) {
     vec4 roll1 = RollingRaindrops(uv, t, RollingRaindropUVScaleLayer01);
-    vec3 stat = quality < 0.5 ? vec3(0.0) : StaticRaindrops(uv, t, StaticRaindropUVScale);
-    vec4 roll2 = quality < 1.5 ? vec4(0.0) : RollingRaindrops(uv * 1.7, t, RollingRaindropUVScaleLayer02);
+    vec3 stat = StaticRaindrops(uv, t, StaticRaindropUVScale);
+    vec4 roll2 = quality < 0.5 ? vec4(0.0) : RollingRaindrops(uv * 1.7, t, RollingRaindropUVScaleLayer02);
     vec4 roll3 = quality < 2.5 ? vec4(0.0) : RollingRaindrops(uv * 2.35, t, RollingRaindropUVScaleLayer02 * 1.15);
 
     float height = stat.x + roll1.x + roll2.x + roll3.x;
@@ -266,11 +272,11 @@ vec4 Raindrops(vec2 uv, float t) {
 }
 
 void main() {
-    float dpr = max(pixelRatio, 1.0);
-    float unit = 1080.0 * dpr;
+    vec2 res = max(resolution, vec2(1.0));
+    float unit = res.y;
 
-    vec2 frag = vec2(qt_TexCoord0.x, 1.0 - qt_TexCoord0.y) * resolution;
-    vec2 uv = (frag - 0.5 * resolution) / unit;
+    vec2 frag = vec2(qt_TexCoord0.x, 1.0 - qt_TexCoord0.y) * res;
+    vec2 uv = (frag - 0.5 * res) / unit;
 
     vec4 rain = Raindrops(uv, time * max(speed, 0.0));
     float h = rain.x;
@@ -293,13 +299,13 @@ void main() {
 
     float ndotl = max(dot(N, L), 0.0);
     float specBroad = pow(max(dot(N, Hv), 0.0), 28.0);
-    float spec = quality < 1.5 ? 0.0 : pow(max(dot(N, Hv), 0.0), quality > 2.5 ? 140.0 : 96.0);
-    float fresnel = quality < 0.5 ? 0.0 : pow(clamp(1.0 - max(N.z, 0.0), 0.0, 1.0), 6.5);
+    float spec = quality < 0.5 ? 0.0 : pow(max(dot(N, Hv), 0.0), quality > 2.5 ? 140.0 : 96.0);
+    float fresnel = pow(clamp(1.0 - max(N.z, 0.0), 0.0, 1.0), 6.5);
     float steep = length(slope);
 
     // Hairline meniscus: only the steepest contact ring.
     float meniscus = 0.0;
-    if (quality > 1.5)
+    if (quality > 0.5)
         meniscus = pow(smoothstep(0.28, 0.82, steep), 2.6) * smoothstep(0.0, 0.02, h)
             * (1.0 - smoothstep(0.05, 0.16, h));
     float body = smoothstep(0.0, 0.22, h);
@@ -316,5 +322,5 @@ void main() {
     col *= mix(0.70, 1.0, ndotl * 0.55 + 0.45);
 
     fragColor = vec4(col * alpha, alpha) * cover * qt_Opacity * clamp(strength, 0.0, 1.0);
-    fragColor.a += 0.0 * lightning;
+    fragColor.a += 0.0 * (sheen + lightning + frequency + azimuth + sunDistance + night + nightTint + nightStrength + pixelRatio);
 }
